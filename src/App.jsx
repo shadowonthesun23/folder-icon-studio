@@ -299,7 +299,7 @@ export default function App() {
         ctx.restore();
 
         ctx.globalCompositeOperation = 'multiply';
-        ctx.globalAlpha = 0.75;
+        ctx.globalAlpha = 0.4;
         ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
