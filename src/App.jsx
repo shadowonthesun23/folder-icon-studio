@@ -349,10 +349,13 @@ export default function App() {
                 <LucideImage size={16} /> 1. Grafica
               </h2>
               {coverSrc && (
-                <label className="relative flex items-center justify-center w-6 h-6 rounded-full border border-white/20 shadow-sm cursor-pointer overflow-hidden transition-transform hover:scale-110" title="Cambia colore base">
-                  <input type="color" value={dominantColor} onChange={e => setDominantColor(e.target.value)} className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer" />
-                  <div className="w-full h-full pointer-events-none" style={{ backgroundColor: dominantColor }} />
-                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-neutral-500">Sfondo retro</span>
+                  <label className="relative flex items-center justify-center w-6 h-6 rounded-full border border-white/20 shadow-sm cursor-pointer overflow-hidden transition-transform hover:scale-110" title="Colore sfondo retro cartella">
+                    <input type="color" value={dominantColor} onChange={e => setDominantColor(e.target.value)} className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer" />
+                    <div className="w-full h-full pointer-events-none" style={{ backgroundColor: dominantColor }} />
+                  </label>
+                </div>
               )}
             </div>
 
