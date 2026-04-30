@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Download, Type, Image as ImageIcon, ZoomIn, Palette, Check, Move } from 'lucide-react';
+import { Upload, Download, Type, Image as ImageIcon, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Instagram, Twitter, Coffee } from 'lucide-react';
 
 const FOLDER_SVG = `<svg width="1024" height="1024" version="1.1" viewBox="0 0 16.933 16.933" xmlns="http://www.w3.org/2000/svg">
  <defs>
@@ -48,28 +48,34 @@ export default function App() {
   const [coverSrc, setCoverSrc] = useState(null);
   const [label, setLabel] = useState('ARCHIVIO 01');
   const [tapeColor, setTapeColor] = useState('#f4ebd0');
+  const [tapeOpacity, setTapeOpacity] = useState(1);
   const [dominantColor, setDominantColor] = useState('#4a90e2');
 
   const [coverOffset, setCoverOffset] = useState({ x: 0, y: 0 });
   const [coverScale, setCoverScale] = useState(1);
+  const [coverRotation, setCoverRotation] = useState(0);
   const [tapeOffset, setTapeOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(null);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    // Iniezione sicura dei Google Fonts
     const link = document.createElement('link');
     link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap';
     link.rel = 'stylesheet';
     document.head.appendChild(link);
 
-    // Caricamento asincrono sicuro dell'SVG base tramite conversione Base64
     const img = new Image();
     img.onload = () => setBaseImgData(img);
-    // encodeURIComponent da solo può fallire. L'encoding Base64 è garantito su tutti i browser.
     const svgBase64 = btoa(unescape(encodeURIComponent(FOLDER_SVG)));
     img.src = `data:image/svg+xml;base64,${svgBase64}`;
   }, []);
+
+  const rgbToHex = (r, g, b) => {
+    return '#' + [r, g, b].map(x => {
+      const hex = x.toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    }).join('');
+  };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -81,6 +87,7 @@ export default function App() {
       setCoverSrc(src);
       setCoverOffset({ x: 0, y: 0 });
       setCoverScale(1);
+      setCoverRotation(0);
       
       const img = new Image();
       img.onload = () => {
@@ -97,7 +104,7 @@ export default function App() {
           g += data[i + 1];
           b += data[i + 2];
         }
-        setDominantColor(`rgb(${Math.round(r / pxCount)}, ${Math.round(g / pxCount)}, ${Math.round(b / pxCount)})`);
+        setDominantColor(rgbToHex(Math.round(r / pxCount), Math.round(g / pxCount), Math.round(b / pxCount)));
       };
       img.src = src;
     };
@@ -184,7 +191,7 @@ export default function App() {
     ctx.closePath();
   };
 
-  const drawTape = (ctx, w, h, text, tapeHex) => {
+  const drawTape = (ctx, w, h, text, tapeHex, opacity) => {
     const tapeW = w * 0.55;
     const tapeH = h * 0.12;
     const tapeBaseX = w / 2 - tapeW / 2;
@@ -212,7 +219,11 @@ export default function App() {
     for (let i = zigs - 1; i >= 0; i--) ctx.lineTo(x + tapeW - (i % 2 === 0 ? 0 : 8), y + i * zigH);
     ctx.lineTo(x, y);
     ctx.closePath();
+    
+    // Applica opacità solo al fondo del nastro
+    ctx.globalAlpha = opacity;
     ctx.fill();
+    ctx.globalAlpha = 1; // Resetta per l'ombra e il testo
 
     ctx.shadowColor = 'transparent';
     ctx.fillStyle = '#111827'; 
@@ -220,7 +231,6 @@ export default function App() {
     ctx.textBaseline = 'middle';
     
     let fontSize = tapeH * 0.55;
-    // Fallback garantito se la connessione ai google fonts fallisce
     ctx.font = `bold ${fontSize}px "Space Mono", monospace, sans-serif`;
     let textMetrics = ctx.measureText(text);
     
@@ -290,8 +300,20 @@ export default function App() {
         
         drawX = rectX + (rectW - drawW) / 2;
         drawY = rectY + (rectH - drawH) / 2;
+
+        const imgFinalX = drawX + coverOffset.x;
+        const imgFinalY = drawY + coverOffset.y;
         
-        ctx.drawImage(coverImg, drawX + coverOffset.x, drawY + coverOffset.y, drawW, drawH);
+        // Setup rotazione intorno al centro dell'immagine disegnata
+        ctx.save();
+        const centerX = imgFinalX + drawW / 2;
+        const centerY = imgFinalY + drawH / 2;
+        ctx.translate(centerX, centerY);
+        ctx.rotate((coverRotation * Math.PI) / 180);
+        ctx.translate(-centerX, -centerY);
+        
+        ctx.drawImage(coverImg, imgFinalX, imgFinalY, drawW, drawH);
+        ctx.restore();
 
         const shadow = ctx.createLinearGradient(0, rectY, 0, rectY + rectH);
         shadow.addColorStop(0, 'rgba(255,255,255,0.15)');
@@ -305,16 +327,15 @@ export default function App() {
       }
 
       if (label.trim() !== '') {
-        drawTape(ctx, w, h, label, tapeColor);
+        drawTape(ctx, w, h, label, tapeColor, tapeOpacity);
       }
     };
 
-    // Forza un re-render continuo per garantire l'aggiornamento appena i font si applicano a livello di sistema operativo
     render();
     const fallbackTimer = setTimeout(render, 500);
     return () => clearTimeout(fallbackTimer);
     
-  }, [baseImgData, coverSrc, label, tapeColor, dominantColor, coverOffset, coverScale, tapeOffset]);
+  }, [baseImgData, coverSrc, label, tapeColor, tapeOpacity, dominantColor, coverOffset, coverScale, coverRotation, tapeOffset]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -329,10 +350,8 @@ export default function App() {
   return (
     <div className="flex flex-col lg:flex-row h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-hidden">
       
-      {/* TRUCCO TECNICO: Nodo DOM invisibile per forzare il download del font Space Mono da parte del browser */}
       <span style={{ fontFamily: 'Space Mono', position: 'absolute', opacity: 0, pointerEvents: 'none' }}>.</span>
 
-      {/* SIDEBAR CONTROLLI */}
       <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[45dvh] lg:h-full overflow-y-auto custom-scrollbar">
         <div className="p-6 lg:p-8 pb-4 lg:pb-6 border-b border-white/5 shrink-0">
           <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-white">Folder Icon Studio</h1>
@@ -347,11 +366,18 @@ export default function App() {
                 <ImageIcon size={16} /> 1. Grafica
               </h2>
               {coverSrc && (
-                <div 
-                  className="w-5 h-5 rounded-full border border-white/20 shadow-sm" 
-                  style={{backgroundColor: dominantColor}} 
-                  title="Palette Base"
-                />
+                <label 
+                  className="relative flex items-center justify-center w-6 h-6 rounded-full border border-white/20 shadow-sm cursor-pointer overflow-hidden transition-transform hover:scale-110" 
+                  title="Cambia colore base"
+                >
+                  <input 
+                    type="color" 
+                    value={dominantColor} 
+                    onChange={(e) => setDominantColor(e.target.value)} 
+                    className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer"
+                  />
+                  <div className="w-full h-full pointer-events-none" style={{backgroundColor: dominantColor}}></div>
+                </label>
               )}
             </div>
             
@@ -367,20 +393,37 @@ export default function App() {
             </label>
 
             {coverSrc && (
-              <div className="bg-[#09090b] p-4 rounded-xl border border-neutral-800/50 space-y-3">
-                <div className="flex justify-between items-center text-xs text-neutral-400">
-                  <span className="flex items-center gap-1"><ZoomIn size={14}/> Zoom</span>
-                  <span>{Math.round(coverScale * 100)}%</span>
+              <div className="bg-[#09090b] p-4 rounded-xl border border-neutral-800/50 space-y-4">
+                <div>
+                  <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
+                    <span className="flex items-center gap-1"><ZoomIn size={14}/> Zoom</span>
+                    <span>{Math.round(coverScale * 100)}%</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0.5" 
+                    max="2.5" 
+                    step="0.05" 
+                    value={coverScale} 
+                    onChange={(e) => setCoverScale(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
                 </div>
-                <input 
-                  type="range" 
-                  min="0.5" 
-                  max="2.5" 
-                  step="0.05" 
-                  value={coverScale} 
-                  onChange={(e) => setCoverScale(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
+                <div>
+                  <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
+                    <span className="flex items-center gap-1"><RotateCw size={14}/> Rotazione</span>
+                    <span>{coverRotation}°</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="-180" 
+                    max="180" 
+                    step="1" 
+                    value={coverRotation} 
+                    onChange={(e) => setCoverRotation(parseInt(e.target.value))}
+                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                </div>
               </div>
             )}
           </section>
@@ -405,24 +448,42 @@ export default function App() {
             </div>
 
             {label.trim() !== '' && (
-              <div className="space-y-2 pt-2">
-                <label className="text-xs text-neutral-500 flex items-center gap-1">
-                  <Palette size={14} /> Colore Nastro
-                </label>
-                <div className="flex gap-3">
-                  {TAPE_COLORS.map(color => (
-                    <button
-                      key={color.id}
-                      onClick={() => setTapeColor(color.hex)}
-                      className={`relative w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${tapeColor === color.hex ? 'border-blue-500 scale-110' : 'border-transparent hover:scale-105'}`}
-                      style={{ backgroundColor: color.hex }}
-                      title={color.name}
-                    >
-                      {tapeColor === color.hex && <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />}
-                    </button>
-                  ))}
+              <>
+                <div className="space-y-2 pt-2">
+                  <label className="text-xs text-neutral-500 flex items-center gap-1">
+                    <Palette size={14} /> Colore Nastro
+                  </label>
+                  <div className="flex gap-3">
+                    {TAPE_COLORS.map(color => (
+                      <button
+                        key={color.id}
+                        onClick={() => setTapeColor(color.hex)}
+                        className={`relative w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${tapeColor === color.hex ? 'border-blue-500 scale-110' : 'border-transparent hover:scale-105'}`}
+                        style={{ backgroundColor: color.hex }}
+                        title={color.name}
+                      >
+                        {tapeColor === color.hex && <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+
+                <div className="space-y-2 pt-4 border-t border-white/5">
+                  <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
+                    <span className="flex items-center gap-1"><Droplet size={14}/> Opacità Nastro</span>
+                    <span>{Math.round(tapeOpacity * 100)}%</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0.1" 
+                    max="1" 
+                    step="0.05" 
+                    value={tapeOpacity} 
+                    onChange={(e) => setTapeOpacity(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                </div>
+              </>
             )}
           </section>
 
@@ -431,14 +492,29 @@ export default function App() {
         <div className="mt-auto p-6 lg:p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
           <button 
             onClick={handleDownload}
-            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white font-medium py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20"
+            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white font-medium py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20 mb-6"
           >
             <Download size={18} /> Scarica PNG (1024x1024)
           </button>
+
+          {/* Sezione Social */}
+          <div className="flex flex-col items-center gap-3 pt-6 border-t border-white/5">
+            <span className="text-[10px] text-neutral-500 font-semibold tracking-widest uppercase">Creato da Antonello</span>
+            <div className="flex items-center gap-5 text-neutral-400">
+              <a href="https://x.com/antonello23" target="_blank" rel="noreferrer" className="hover:text-white transition-colors" title="X / Twitter">
+                <Twitter size={16} />
+              </a>
+              <a href="https://www.instagram.com/antonelloan23/" target="_blank" rel="noreferrer" className="hover:text-white transition-colors" title="Instagram">
+                <Instagram size={16} />
+              </a>
+              <a href="https://buymeacoffee.com/antonello23" target="_blank" rel="noreferrer" className="hover:text-white transition-colors" title="Buy me a coffee">
+                <Coffee size={16} />
+              </a>
+            </div>
+          </div>
         </div>
       </aside>
 
-      {/* AREA DI LAVORO */}
       <main className="flex-1 relative flex flex-col items-center justify-center min-h-0 overflow-hidden bg-dot-pattern p-4 md:p-8">
         
         <style dangerouslySetInnerHTML={{__html: `
