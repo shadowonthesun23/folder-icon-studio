@@ -433,8 +433,7 @@ export default function App() {
         </div>
 
         <div className="mt-auto p-6 lg:p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
-          <button onClick={handleDownload}
-            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white font-medium py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20 mb-6">
+          <button onClick={handleDownload} className="liquid-glass-btn w-full font-medium py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 mb-6">
             <Download size={18} /> Scarica PNG (1024x1024)
           </button>
           <div className="flex flex-col items-center gap-3 pt-6 border-t border-white/5">
@@ -454,6 +453,64 @@ export default function App() {
           .custom-scrollbar::-webkit-scrollbar { width: 6px; }
           .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
           .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.1); border-radius: 10px; }
+
+          .liquid-glass-btn {
+            position: relative;
+            overflow: hidden;
+            color: rgba(255,255,255,0.92);
+            font-weight: 500;
+            background: linear-gradient(145deg,
+              rgba(255,255,255,0.13) 0%,
+              rgba(255,255,255,0.05) 50%,
+              rgba(255,255,255,0.10) 100%
+            );
+            border: 1px solid rgba(255,255,255,0.18);
+            box-shadow:
+              0 2px 0 rgba(255,255,255,0.12) inset,
+              0 -1px 0 rgba(0,0,0,0.25) inset,
+              0 8px 32px rgba(0,0,0,0.35),
+              0 1px 8px rgba(255,255,255,0.04);
+            backdrop-filter: blur(12px) saturate(160%);
+            -webkit-backdrop-filter: blur(12px) saturate(160%);
+            transition: all 0.2s ease;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+          }
+          .liquid-glass-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 50%;
+            background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, transparent 100%);
+            border-radius: inherit;
+            pointer-events: none;
+          }
+          .liquid-glass-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.08) 0%, transparent 60%);
+            pointer-events: none;
+          }
+          .liquid-glass-btn:hover {
+            background: linear-gradient(145deg,
+              rgba(255,255,255,0.20) 0%,
+              rgba(255,255,255,0.09) 50%,
+              rgba(255,255,255,0.15) 100%
+            );
+            border-color: rgba(255,255,255,0.28);
+            box-shadow:
+              0 2px 0 rgba(255,255,255,0.16) inset,
+              0 -1px 0 rgba(0,0,0,0.25) inset,
+              0 12px 40px rgba(0,0,0,0.4),
+              0 1px 12px rgba(255,255,255,0.06);
+          }
+          .liquid-glass-btn:active {
+            transform: scale(0.98);
+            box-shadow:
+              0 1px 0 rgba(255,255,255,0.08) inset,
+              0 -1px 0 rgba(0,0,0,0.25) inset,
+              0 4px 16px rgba(0,0,0,0.3);
+          }
         `}} />
         <div className="relative group w-full h-full flex items-center justify-center max-w-4xl" style={{ touchAction: 'none' }}>
           {(coverSrc || label.trim() !== '') && (
