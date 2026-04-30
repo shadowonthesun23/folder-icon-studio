@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 
 const FOLDERS = {
   classic: {
@@ -471,6 +472,7 @@ export default function App() {
             }`} />
         </div>
       </main>
+      <Analytics />
     </div>
   );
 }
