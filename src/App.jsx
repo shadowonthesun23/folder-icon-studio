@@ -480,7 +480,7 @@ export default function App() {
           </button>
 
           <div className="flex flex-col items-center gap-3 pt-6 border-t border-white/5">
-            <span className="text-[10px] text-neutral-500 font-semibold tracking-widest uppercase">Creato da Antonello</span>
+            <span className="text-[10px] text-neutral-500 font-semibold tracking-widest uppercase">Made with love by Antonello</span>
             <div className="flex items-center gap-5 text-neutral-400">
               <a href="https://x.com/antonello23" target="_blank" rel="noreferrer" className="hover:text-white transition-colors" title="X / Twitter">
                 <IconX size={16} />
