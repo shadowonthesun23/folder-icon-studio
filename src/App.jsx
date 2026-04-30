@@ -6,16 +6,17 @@ const FOLDERS = {
     id: 'classic',
     name: 'Classica',
     svg: "<svg width='1024' height='1024' version='1.1' viewBox='0 0 16.933 16.933' xmlns='http://www.w3.org/2000/svg'><defs><filter id='filter9' x='-.0065174' y='-.075603' width='1.013' height='1.1512' color-interpolation-filters='sRGB'><feGaussianBlur stdDeviation='0.041672346'/></filter><filter id='filter11' x='-.0069629' y='-.043386' width='1.0139' height='1.0868' color-interpolation-filters='sRGB'><feGaussianBlur stdDeviation='0.044522292'/></filter><filter id='filter12' x='-.03226' y='-.045842' width='1.0645' height='1.0917' color-interpolation-filters='sRGB'><feGaussianBlur stdDeviation='0.13691812'/></filter><linearGradient id='a' x1='8.466' x2='8.466' y1='12.7' y2='2.381' gradientUnits='userSpaceOnUse'><stop offset='0'/><stop stop-opacity='0' offset='1'/></linearGradient><linearGradient id='c' x1='8.467' x2='8.467' y1='4.498' y2='14.552' gradientUnits='userSpaceOnUse'><stop stop-color='#fff' offset='0'/><stop offset='1'/></linearGradient></defs><g id='folder'><path d='m1.945 2.381h2.965c0.75 0 0.904 0.084 1.27 0.63 0.297 0.441 0.84 0.429 1.756 0.429h7.05a1.146 1.146 0 0 1 1.152 1.152v6.956a1.15 1.15 0 0 1-1.152 1.152h-13.042a1.15 1.15 0 0 1-1.15-1.152v-8.015a1.15 1.15 0 0 1 1.15-1.152z' fill='#686868'/><path d='m1.945 2.381h2.965c0.75 0 0.904 0.084 1.27 0.63 0.297 0.441 0.84 0.429 1.756 0.429h7.05a1.146 1.146 0 0 1 1.152 1.152v6.956a1.15 1.15 0 0 1-1.152 1.152h-13.042a1.15 1.15 0 0 1-1.15-1.152v-8.015a1.15 1.15 0 0 1 1.15-1.152z' fill='url(#a)'/><rect x='1.3229' y='3.9687' width='14.287' height='10.054' rx='.52916' ry='.52916' fill='none' filter='url(#filter12)' opacity='.1' stroke='#000000' stroke-width='.26458'/><rect x='1.3229' y='3.9687' width='14.287' height='10.054' rx='.52916' ry='.52916' fill='#ffffff' stroke-width='.9649'/><rect x='.794' y='4.498' width='15.346' height='10.054' rx='1.058' ry='1.058' fill='#686868'/><rect x='.793' y='4.498' width='15.346' height='10.054' rx='1.058' ry='1.058' fill='url(#c)' opacity='.15'/><path d='m1.852 4.4978c-0.5863 0-1.0583 0.47201-1.0583 1.0583v0.26458c0-0.5863 0.47201-1.0583 1.0583-1.0583h13.229c0.5863 0 1.0583 0.47201 1.0583 1.0583v-0.26458c0-0.5863-0.47201-1.0583-1.0583-1.0583z' fill='#ffffff' filter='url(#filter9)' opacity='.15'/><path transform='matrix(1,0,0,-1,0,19.05)' d='m1.852 4.4978c-0.5863 0-1.0583 0.47201-1.0583 1.0583v0.26458c0-0.5863 0.47201-1.0583 1.0583-1.0583h13.229c0.5863 0 1.0583 0.47201 1.0583 1.0583v-0.26458c0-0.5863-0.47201-1.0583-1.0583-1.0583z' fill='#000000' filter='url(#filter9)' opacity='.1'/><path d='m1.944 2.3812c-0.6363-6e-4 -1.1519 0.51554-1.1508 1.1518v0.26044c0.001104-0.63442 0.51587-1.1483 1.1508-1.1477h2.9672c0.75 0 0.90392 0.083623 1.2707 0.62992 0.2962 0.44122 0.83942 0.42839 1.7554 0.42839h7.0501c0.63356-0.00333 1.1486 0.50792 1.1518 1.14v-0.25269c0.0033-0.63761-0.51424-1.1552-1.1518-1.1518h-7.0501c-0.91599 0-1.4592 0.012831-1.7554-0.42839-0.36678-0.5463-0.5207-0.62992-1.2707-0.62992h-2.9672z' fill='#ffffff' filter='url(#filter11)' opacity='.25'/></g></svg>",
+    // Quadrato: occupa tutto il canvas
+    getFolderRect: (cw, ch) => ({ x: 0, y: 0, w: cw, h: ch }),
     clipRect: { x: 0.794, y: 4.498, w: 15.346, h: 10.054, vw: 16.933, vh: 16.933 },
-    buildFlapPath: (ctx, w, h) => {
-      const scaleX = w / 16.933;
-      const scaleY = h / 16.933;
-      const x = 0.794 * scaleX;
-      const y = 4.498 * scaleY;
-      const width = 15.346 * scaleX;
-      const height = 10.054 * scaleY;
-      const r = 1.058 * Math.min(scaleX, scaleY);
-
+    buildFlapPath: (ctx, rect) => {
+      const sX = rect.w / 16.933;
+      const sY = rect.h / 16.933;
+      const x = rect.x + 0.794 * sX;
+      const y = rect.y + 4.498 * sY;
+      const width = 15.346 * sX;
+      const height = 10.054 * sY;
+      const r = 1.058 * Math.min(sX, sY);
       ctx.beginPath();
       ctx.moveTo(x + r, y);
       ctx.lineTo(x + width - r, y);
@@ -32,28 +33,32 @@ const FOLDERS = {
   macos: {
     id: 'macos',
     name: 'macOS Custom',
-    svg: "<svg xmlns='http://www.w3.org/2000/svg' width='241' height='180' viewBox='0 0 241 180' fill='none'> <g filter='url(#filter0_ii_301_33)'> <path d='M226.745 23.9374V142.139C226.745 145.877 223.715 148.907 219.977 148.907H20.3055C16.5674 148.907 13.537 145.877 13.537 142.139V6.76851C13.537 3.03036 16.5674 0 20.3055 0H85.1799C89.1801 0 93.0508 1.4171 96.1054 3.99982L109.788 15.569C111.01 16.6021 112.558 17.1689 114.158 17.1689H219.977C223.715 17.1689 226.745 20.1993 226.745 23.9374Z' fill='url(#paint0_linear_301_33)'/> </g> <g filter='url(#filter1_dii_301_33)'> <path d='M13.537 40.8587V159.06C13.537 162.798 16.5674 165.828 20.3055 165.828H219.977C223.715 165.828 226.745 162.798 226.745 159.06V30.4583C226.745 26.7201 223.715 23.6898 219.977 23.6898H118.211C113.919 23.6898 109.688 24.7101 105.868 26.6667L97.187 31.1132C93.367 33.0698 89.1366 34.0901 84.8447 34.0901H20.3055C16.5674 34.0901 13.537 37.1205 13.537 40.8587Z' fill='url(#paint1_linear_301_33)'/> </g> <defs> <filter id='filter0_ii_301_33' x='13.537' y='-3.38425' width='213.208' height='153.984'> <feFlood flood-opacity='0' result='BackgroundImageFix'/> <feBlend mode='normal' in='SourceGraphic' in2='BackgroundImageFix' result='shape'/> <feColorMatrix in='SourceAlpha' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='hardAlpha'/> <feOffset dy='1.69213'/> <feGaussianBlur stdDeviation='1.69213'/> <feComposite in2='hardAlpha'/> <feColorMatrix type='matrix' values='0 0 0 0 0.941176 0 0 0 0 0.839216 0 0 0 0 0.301961 0 0 0 1 0'/> <feBlend mode='normal' in2='shape' result='effect1_innerShadow_301_33'/> <feColorMatrix in='SourceAlpha' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='hardAlpha'/> <feOffset dy='-3.38425'/> <feGaussianBlur stdDeviation='1.69213'/> <feComposite in2='hardAlpha'/> <feColorMatrix type='matrix' values='0 0 0 0 0.811765 0 0 0 0 0.521569 0 0 0 0 0.2 0 0 0 1 0'/> <feBlend mode='normal' in2='effect1_innerShadow_301_33' result='effect2_innerShadow_301_33'/> </filter> <filter id='filter1_dii_301_33' x='9.53674e-07' y='10.1527' width='240.282' height='169.213'> <feFlood flood-opacity='0' result='BackgroundImageFix'/> <feColorMatrix in='SourceAlpha' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='hardAlpha'/> <feOffset/> <feGaussianBlur stdDeviation='6.76851'/> <feComposite in2='hardAlpha'/> <feColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.1 0'/> <feBlend mode='normal' in2='BackgroundImageFix' result='effect1_dropShadow_301_33'/> <feBlend mode='normal' in='SourceGraphic' in2='effect1_dropShadow_301_33' result='shape'/> <feColorMatrix in='SourceAlpha' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='hardAlpha'/> <feOffset dy='1.69213'/> <feGaussianBlur stdDeviation='3.38425'/> <feComposite in2='hardAlpha'/> <feColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 0.974775 0 0 0 0 0.733333 0 0 0 1 0'/> <feBlend mode='normal' in2='shape' result='effect2_innerShadow_301_33'/> <feColorMatrix in='SourceAlpha' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='hardAlpha'/> <feOffset dy='-3.38425'/> <feGaussianBlur stdDeviation='1.69213'/> <feComposite in2='hardAlpha'/> <feColorMatrix type='matrix' values='0 0 0 0 0.811765 0 0 0 0 0.521569 0 0 0 0 0.2 0 0 0 1 0'/> <feBlend mode='normal' in2='effect2_innerShadow_301_33' result='effect3_innerShadow_301_33'/> </filter> <linearGradient id='paint0_linear_301_33' x1='82.9142' y1='6.7685' x2='84.6063' y2='37.2268' gradientUnits='userSpaceOnUse'> <stop offset='0.0416796' stop-color='#E1AE40'/> <stop offset='1' stop-color='#ECAB3F'/> </linearGradient> <linearGradient id='paint1_linear_301_33' x1='120.141' y1='23.6898' x2='120.141' y2='165.828' gradientUnits='userSpaceOnUse'> <stop stop-color='#F8D555'/> <stop offset='1' stop-color='#E0A53F'/> </linearGradient> </defs> </svg>",
-    // pannello frontale nel viewport 241 x 180
+    svg: "<svg xmlns='http://www.w3.org/2000/svg' width='241' height='180' viewBox='0 0 241 180' fill='none'><g filter='url(#filter0_ii_301_33)'><path d='M226.745 23.9374V142.139C226.745 145.877 223.715 148.907 219.977 148.907H20.3055C16.5674 148.907 13.537 145.877 13.537 142.139V6.76851C13.537 3.03036 16.5674 0 20.3055 0H85.1799C89.1801 0 93.0508 1.4171 96.1054 3.99982L109.788 15.569C111.01 16.6021 112.558 17.1689 114.158 17.1689H219.977C223.715 17.1689 226.745 20.1993 226.745 23.9374Z' fill='url(#paint0_linear_301_33)'/></g><g filter='url(#filter1_dii_301_33)'><path d='M13.537 40.8587V159.06C13.537 162.798 16.5674 165.828 20.3055 165.828H219.977C223.715 165.828 226.745 162.798 226.745 159.06V30.4583C226.745 26.7201 223.715 23.6898 219.977 23.6898H118.211C113.919 23.6898 109.688 24.7101 105.868 26.6667L97.187 31.1132C93.367 33.0698 89.1366 34.0901 84.8447 34.0901H20.3055C16.5674 34.0901 13.537 37.1205 13.537 40.8587Z' fill='url(#paint1_linear_301_33)'/></g><defs><filter id='filter0_ii_301_33' x='13.537' y='-3.38425' width='213.208' height='153.984'><feFlood flood-opacity='0' result='BackgroundImageFix'/><feBlend mode='normal' in='SourceGraphic' in2='BackgroundImageFix' result='shape'/><feColorMatrix in='SourceAlpha' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='hardAlpha'/><feOffset dy='1.69213'/><feGaussianBlur stdDeviation='1.69213'/><feComposite in2='hardAlpha'/><feColorMatrix type='matrix' values='0 0 0 0 0.941176 0 0 0 0 0.839216 0 0 0 0 0.301961 0 0 0 1 0'/><feBlend mode='normal' in2='shape' result='effect1_innerShadow_301_33'/><feColorMatrix in='SourceAlpha' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='hardAlpha'/><feOffset dy='-3.38425'/><feGaussianBlur stdDeviation='1.69213'/><feComposite in2='hardAlpha'/><feColorMatrix type='matrix' values='0 0 0 0 0.811765 0 0 0 0 0.521569 0 0 0 0 0.2 0 0 0 1 0'/><feBlend mode='normal' in2='effect1_innerShadow_301_33' result='effect2_innerShadow_301_33'/></filter><filter id='filter1_dii_301_33' x='0' y='10.1527' width='240.282' height='169.213'><feFlood flood-opacity='0' result='BackgroundImageFix'/><feColorMatrix in='SourceAlpha' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='hardAlpha'/><feOffset/><feGaussianBlur stdDeviation='6.76851'/><feComposite in2='hardAlpha'/><feColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.1 0'/><feBlend mode='normal' in2='BackgroundImageFix' result='effect1_dropShadow_301_33'/><feBlend mode='normal' in='SourceGraphic' in2='effect1_dropShadow_301_33' result='shape'/><feColorMatrix in='SourceAlpha' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='hardAlpha'/><feOffset dy='1.69213'/><feGaussianBlur stdDeviation='3.38425'/><feComposite in2='hardAlpha'/><feColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 0.974775 0 0 0 0 0.733333 0 0 0 1 0'/><feBlend mode='normal' in2='shape' result='effect2_innerShadow_301_33'/><feColorMatrix in='SourceAlpha' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='hardAlpha'/><feOffset dy='-3.38425'/><feGaussianBlur stdDeviation='1.69213'/><feComposite in2='hardAlpha'/><feColorMatrix type='matrix' values='0 0 0 0 0.811765 0 0 0 0 0.521569 0 0 0 0 0.2 0 0 0 1 0'/><feBlend mode='normal' in2='effect2_innerShadow_301_33' result='effect3_innerShadow_301_33'/></filter><linearGradient id='paint0_linear_301_33' x1='82.9142' y1='6.7685' x2='84.6063' y2='37.2268' gradientUnits='userSpaceOnUse'><stop offset='0.0416796' stop-color='#E1AE40'/><stop offset='1' stop-color='#ECAB3F'/></linearGradient><linearGradient id='paint1_linear_301_33' x1='120.141' y1='23.6898' x2='120.141' y2='165.828' gradientUnits='userSpaceOnUse'><stop stop-color='#F8D555'/><stop offset='1' stop-color='#E0A53F'/></linearGradient></defs></svg>",
+    // 241:180 — letterbox nel canvas quadrato, centrato verticalmente
+    getFolderRect: (cw, ch) => {
+      const fh = Math.round(cw * 180 / 241);
+      return { x: 0, y: Math.round((ch - fh) / 2), w: cw, h: fh };
+    },
     clipRect: { x: 13.537, y: 23.6898, w: 213.208, h: 142.138, vw: 241, vh: 180 },
-    buildFlapPath: (ctx, w, h) => {
-      const sX = w / 241;
-      const sY = h / 180;
-
-      // Traccia il secondo path (pannello frontale) di yellow-folder.svg
+    buildFlapPath: (ctx, rect) => {
+      const sX = rect.w / 241;
+      const sY = rect.h / 180;
+      const oX = rect.x;
+      const oY = rect.y;
       ctx.beginPath();
-      ctx.moveTo(13.537 * sX, 40.8587 * sY);
-      ctx.lineTo(13.537 * sX, 159.06 * sY);
-      ctx.bezierCurveTo(13.537 * sX, 162.798 * sY, 16.5674 * sX, 165.828 * sY, 20.3055 * sX, 165.828 * sY);
-      ctx.lineTo(219.977 * sX, 165.828 * sY);
-      ctx.bezierCurveTo(223.715 * sX, 165.828 * sY, 226.745 * sX, 162.798 * sY, 226.745 * sX, 159.06 * sY);
-      ctx.lineTo(226.745 * sX, 30.4583 * sY);
-      ctx.bezierCurveTo(226.745 * sX, 26.7201 * sY, 223.715 * sX, 23.6898 * sY, 219.977 * sX, 23.6898 * sY);
-      ctx.lineTo(118.211 * sX, 23.6898 * sY);
-      ctx.bezierCurveTo(113.919 * sX, 23.6898 * sY, 109.688 * sX, 24.7101 * sY, 105.868 * sX, 26.6667 * sY);
-      ctx.lineTo(97.187 * sX, 31.1132 * sY);
-      ctx.bezierCurveTo(93.367 * sX, 33.0698 * sY, 89.1366 * sX, 34.0901 * sY, 84.8447 * sX, 34.0901 * sY);
-      ctx.lineTo(20.3055 * sX, 34.0901 * sY);
-      ctx.bezierCurveTo(16.5674 * sX, 34.0901 * sY, 13.537 * sX, 37.1205 * sY, 13.537 * sX, 40.8587 * sY);
+      ctx.moveTo(oX + 13.537 * sX, oY + 40.8587 * sY);
+      ctx.lineTo(oX + 13.537 * sX, oY + 159.06 * sY);
+      ctx.bezierCurveTo(oX + 13.537 * sX, oY + 162.798 * sY, oX + 16.5674 * sX, oY + 165.828 * sY, oX + 20.3055 * sX, oY + 165.828 * sY);
+      ctx.lineTo(oX + 219.977 * sX, oY + 165.828 * sY);
+      ctx.bezierCurveTo(oX + 223.715 * sX, oY + 165.828 * sY, oX + 226.745 * sX, oY + 162.798 * sY, oX + 226.745 * sX, oY + 159.06 * sY);
+      ctx.lineTo(oX + 226.745 * sX, oY + 30.4583 * sY);
+      ctx.bezierCurveTo(oX + 226.745 * sX, oY + 26.7201 * sY, oX + 223.715 * sX, oY + 23.6898 * sY, oX + 219.977 * sX, oY + 23.6898 * sY);
+      ctx.lineTo(oX + 118.211 * sX, oY + 23.6898 * sY);
+      ctx.bezierCurveTo(oX + 113.919 * sX, oY + 23.6898 * sY, oX + 109.688 * sX, oY + 24.7101 * sY, oX + 105.868 * sX, oY + 26.6667 * sY);
+      ctx.lineTo(oX + 97.187 * sX, oY + 31.1132 * sY);
+      ctx.bezierCurveTo(oX + 93.367 * sX, oY + 33.0698 * sY, oX + 89.1366 * sX, oY + 34.0901 * sY, oX + 84.8447 * sX, oY + 34.0901 * sY);
+      ctx.lineTo(oX + 20.3055 * sX, oY + 34.0901 * sY);
+      ctx.bezierCurveTo(oX + 16.5674 * sX, oY + 34.0901 * sY, oX + 13.537 * sX, oY + 37.1205 * sY, oX + 13.537 * sX, oY + 40.8587 * sY);
       ctx.closePath();
     }
   }
@@ -169,13 +174,9 @@ export default function App() {
     const shape = FOLDERS[folderShape];
     const img = document.createElement('img');
     img.onload = () => setBaseImgData(img);
-    
-    if (shape.url) {
-      img.src = shape.url;
-    } else {
-      const svgBase64 = window.btoa(unescape(encodeURIComponent(shape.svg)));
-      img.src = `data:image/svg+xml;base64,${svgBase64}`;
-    }
+    img.onerror = () => console.error('Folder SVG failed to load for:', folderShape);
+    // encodeURIComponent è più affidabile di btoa per SVG con filtri/gradienti complessi
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(shape.svg)}`;
   }, [folderShape]);
 
   const handleFileUpload = (e) => {
@@ -281,16 +282,19 @@ export default function App() {
     const render = async () => {
       ctx.clearRect(0, 0, w, h);
 
+      // Rect effettiva del folder sul canvas (gestisce aspect ratio non-quadrato)
+      const folderRect = FOLDERS[folderShape].getFolderRect(w, h);
+
       ctx.save();
-      ctx.drawImage(baseImgData, 0, 0, w, h);
+      ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       
       if (coverSrc) {
         ctx.globalCompositeOperation = 'color';
         ctx.fillStyle = dominantColor;
-        ctx.fillRect(0, 0, w, h);
+        ctx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
         
         ctx.globalCompositeOperation = 'destination-in';
-        ctx.drawImage(baseImgData, 0, 0, w, h);
+        ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
       ctx.restore();
 
@@ -302,14 +306,15 @@ export default function App() {
         });
 
         ctx.save();
-        FOLDERS[folderShape].buildFlapPath(ctx, w, h);
+        FOLDERS[folderShape].buildFlapPath(ctx, folderRect);
         ctx.clip();
 
+        // clipRect relativo al folderRect
         const { clipRect } = FOLDERS[folderShape];
-        const rectX = clipRect.x * (w / clipRect.vw);
-        const rectY = clipRect.y * (h / clipRect.vh);
-        const rectW = clipRect.w * (w / clipRect.vw);
-        const rectH = clipRect.h * (h / clipRect.vh);
+        const rectX = folderRect.x + clipRect.x * (folderRect.w / clipRect.vw);
+        const rectY = folderRect.y + clipRect.y * (folderRect.h / clipRect.vh);
+        const rectW = clipRect.w * (folderRect.w / clipRect.vw);
+        const rectH = clipRect.h * (folderRect.h / clipRect.vh);
 
         const imgRatio = coverImg.width / coverImg.height;
         const canvasRatio = rectW / rectH;
