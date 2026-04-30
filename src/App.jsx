@@ -75,6 +75,14 @@ const TAPE_COLORS = [
 
 const rgbToHex = (r, g, b) => '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
 
+const getTapeTextColor = (hex) => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? '#111827' : '#ffffff';
+};
+
 const loadSvgAsImage = (svgString) => new Promise((resolve, reject) => {
   const blob = new Blob([svgString], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
@@ -115,7 +123,7 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY) =
   ctx.globalAlpha = 1;
   ctx.shadowColor = 'transparent';
 
-  ctx.fillStyle = '#111827';
+  ctx.fillStyle = getTapeTextColor(tapeHex);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   let fontSize = tapeH * 0.55;
