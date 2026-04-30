@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee } from 'lucide-react';
+import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
 const FOLDERS = {
@@ -33,7 +33,7 @@ const FOLDERS = {
   },
   macos: {
     id: 'macos',
-    name: 'macOS Custom',
+    name: 'macOS',
     tintFolder: false,
     svg: "<svg xmlns='http://www.w3.org/2000/svg' width='241' height='180' viewBox='0 0 241 180' fill='none'><g filter='url(#f0)'><path d='M226.745 23.9374V142.139C226.745 145.877 223.715 148.907 219.977 148.907H20.3055C16.5674 148.907 13.537 145.877 13.537 142.139V6.76851C13.537 3.03036 16.5674 0 20.3055 0H85.1799C89.1801 0 93.0508 1.4171 96.1054 3.99982L109.788 15.569C111.01 16.6021 112.558 17.1689 114.158 17.1689H219.977C223.715 17.1689 226.745 20.1993 226.745 23.9374Z' fill='url(#g0)'/></g><g filter='url(#f1)'><path d='M13.537 40.8587V159.06C13.537 162.798 16.5674 165.828 20.3055 165.828H219.977C223.715 165.828 226.745 162.798 226.745 159.06V30.4583C226.745 26.7201 223.715 23.6898 219.977 23.6898H118.211C113.919 23.6898 109.688 24.7101 105.868 26.6667L97.187 31.1132C93.367 33.0698 89.1366 34.0901 84.8447 34.0901H20.3055C16.5674 34.0901 13.537 37.1205 13.537 40.8587Z' fill='url(#g1)'/></g><defs><filter id='f0' x='13' y='-4' width='215' height='156' filterUnits='userSpaceOnUse' color-interpolation-filters='sRGB'><feFlood flood-opacity='0' result='bg'/><feBlend in='SourceGraphic' in2='bg' result='shape'/><feColorMatrix in='SourceAlpha' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='alpha'/><feOffset dy='1.7'/><feGaussianBlur stdDeviation='1.7'/><feComposite in2='alpha'/><feColorMatrix values='0 0 0 0 0.94 0 0 0 0 0.84 0 0 0 0 0.3 0 0 0 1 0'/><feBlend in='SourceGraphic' in2='shape' result='s1'/><feColorMatrix in='SourceAlpha' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='alpha2'/><feOffset dy='-3.4'/><feGaussianBlur stdDeviation='1.7'/><feComposite in2='alpha2'/><feColorMatrix values='0 0 0 0 0.81 0 0 0 0 0.52 0 0 0 0 0.2 0 0 0 1 0'/><feBlend in2='s1'/></filter><filter id='f1' x='0' y='10' width='241' height='170' filterUnits='userSpaceOnUse' color-interpolation-filters='sRGB'><feFlood flood-opacity='0' result='bg'/><feColorMatrix in='SourceAlpha' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='alpha'/><feOffset/><feGaussianBlur stdDeviation='6.8'/><feComposite in2='alpha'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.1 0'/><feBlend in2='bg' result='shadow'/><feBlend in='SourceGraphic' in2='shadow' result='shape'/><feColorMatrix in='SourceAlpha' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='alpha3'/><feOffset dy='1.7'/><feGaussianBlur stdDeviation='3.4'/><feComposite in2='alpha3'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 0.975 0 0 0 0 0.733 0 0 0 1 0'/><feBlend in2='shape' result='s2'/><feColorMatrix in='SourceAlpha' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='alpha4'/><feOffset dy='-3.4'/><feGaussianBlur stdDeviation='1.7'/><feComposite in2='alpha4'/><feColorMatrix values='0 0 0 0 0.81 0 0 0 0 0.52 0 0 0 0 0.2 0 0 0 1 0'/><feBlend in2='s2'/></filter><linearGradient id='g0' x1='82.9' y1='6.8' x2='84.6' y2='37.2' gradientUnits='userSpaceOnUse'><stop offset='0.04' stop-color='#E1AE40'/><stop offset='1' stop-color='#ECAB3F'/></linearGradient><linearGradient id='g1' x1='120' y1='23.7' x2='120' y2='165.8' gradientUnits='userSpaceOnUse'><stop stop-color='#F8D555'/><stop offset='1' stop-color='#E0A53F'/></linearGradient></defs></svg>",
     getFolderRect: (cw, ch) => {
@@ -147,11 +147,11 @@ export default function App() {
   const canvasRef = useRef(null);
   const [baseImgData, setBaseImgData] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
-  const [label, setLabel] = useState('ARCHIVIO 01');
+  const [label, setLabel] = useState('Archivio 01');
   const [tapeColor, setTapeColor] = useState('#f4ebd0');
   const [tapeOpacity, setTapeOpacity] = useState(1);
   const [dominantColor, setDominantColor] = useState('#4a90e2');
-  const folderShape = 'classic';
+  const [folderShape, setFolderShape] = useState('classic');
   const [coverOffset, setCoverOffset] = useState({ x: 0, y: 0 });
   const [coverScale, setCoverScale] = useState(1);
   const [coverRotation, setCoverRotation] = useState(0);
@@ -329,6 +329,8 @@ export default function App() {
     link.click();
   };
 
+  const isPresetColor = TAPE_COLORS.some(c => c.hex === tapeColor);
+
   return (
     <div className="flex flex-col lg:flex-row h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-hidden">
       <span style={{ fontFamily: 'Space Mono', position: 'absolute', opacity: 0, pointerEvents: 'none' }}>.</span>
@@ -359,12 +361,26 @@ export default function App() {
               )}
             </div>
 
+            {/* Folder style selector */}
+            <div className="flex gap-2">
+              {Object.values(FOLDERS).map(f => (
+                <button key={f.id} onClick={() => setFolderShape(f.id)}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all border ${
+                    folderShape === f.id
+                      ? 'bg-blue-600/20 border-blue-500/60 text-blue-300'
+                      : 'bg-[#09090b] border-neutral-700/50 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'
+                  }`}>
+                  {f.name}
+                </button>
+              ))}
+            </div>
+
             <label className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all bg-[#09090b] border border-neutral-700/50 border-dashed rounded-xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 group">
               <div className="flex flex-col items-center space-y-2 text-center">
                 <div className="p-3 bg-neutral-800 rounded-full group-hover:bg-blue-500/20 transition-colors">
                   <Upload size={20} className="text-neutral-400 group-hover:text-blue-400" />
                 </div>
-                <span className="font-medium text-sm text-neutral-300">Carica Immagine</span>
+                <span className="font-medium text-sm text-neutral-300">{coverSrc ? 'Cambia immagine' : 'Carica Immagine'}</span>
                 <span className="text-xs text-neutral-500">JPG, PNG, WEBP</span>
               </div>
               <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
@@ -400,19 +416,35 @@ export default function App() {
             </h2>
             <div className="space-y-2">
               <label className="text-xs text-neutral-500">Testo (lascia vuoto per nascondere)</label>
-              <input type="text" value={label} maxLength={30} onChange={e => setLabel(e.target.value.toUpperCase())}
-                className="w-full bg-[#09090b] border border-neutral-700/50 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono uppercase transition-all"
-                placeholder="ES. PROGETTO X" />
+              <input
+                type="text"
+                value={label}
+                maxLength={30}
+                onChange={e => setLabel(e.target.value)}
+                className="w-full bg-[#09090b] border border-neutral-700/50 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all"
+                placeholder="Es. Progetto X"
+              />
             </div>
             {label.trim() !== '' && (
               <>
-                <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-                  <Move size={11} className="shrink-0" />
-                  Trascina l&apos;etichetta in anteprima per riposizionarla
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                    <Move size={11} className="shrink-0" />
+                    Trascina l&apos;etichetta in anteprima per riposizionarla
+                  </p>
+                  {(tapeOffset.x !== 0 || tapeOffset.y !== 0) && (
+                    <button
+                      onClick={() => setTapeOffset({ x: 0, y: 0 })}
+                      className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0"
+                      title="Ripristina posizione"
+                    >
+                      <RotateCcw size={10} /> reset
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-2 pt-2">
                   <label className="text-xs text-neutral-500 flex items-center gap-1"><Palette size={14} /> Colore Nastro</label>
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 items-center">
                     {TAPE_COLORS.map(color => (
                       <button key={color.id} onClick={() => setTapeColor(color.hex)}
                         className={`relative w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${
@@ -421,6 +453,18 @@ export default function App() {
                         {tapeColor === color.hex && <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />}
                       </button>
                     ))}
+                    {/* Free color picker */}
+                    <label
+                      className={`relative w-8 h-8 rounded-full border-2 cursor-pointer flex items-center justify-center overflow-hidden transition-all hover:scale-105 ${
+                        !isPresetColor ? 'border-blue-500 scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
+                      }`}
+                      style={!isPresetColor ? { backgroundColor: tapeColor } : {}}
+                      title="Colore personalizzato"
+                    >
+                      <input type="color" value={tapeColor} onChange={e => setTapeColor(e.target.value)} className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer" />
+                      {isPresetColor && <Palette size={12} className="text-neutral-400 pointer-events-none" />}
+                      {!isPresetColor && <Check size={14} className="pointer-events-none" style={{ color: '#fff', mixBlendMode: 'difference' }} />}
+                    </label>
                   </div>
                 </div>
                 <div className="space-y-2 pt-4 border-t border-white/5">
@@ -457,65 +501,42 @@ export default function App() {
           .custom-scrollbar::-webkit-scrollbar { width: 6px; }
           .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
           .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.1); border-radius: 10px; }
-
           .liquid-glass-btn {
-            position: relative;
-            overflow: hidden;
-            color: rgba(255,255,255,0.92);
-            font-weight: 500;
-            background: linear-gradient(145deg,
-              rgba(255,255,255,0.13) 0%,
-              rgba(255,255,255,0.05) 50%,
-              rgba(255,255,255,0.10) 100%
-            );
+            position: relative; overflow: hidden; color: rgba(255,255,255,0.92); font-weight: 500;
+            background: linear-gradient(145deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.10) 100%);
             border: 1px solid rgba(255,255,255,0.18);
-            box-shadow:
-              0 2px 0 rgba(255,255,255,0.12) inset,
-              0 -1px 0 rgba(0,0,0,0.25) inset,
-              0 8px 32px rgba(0,0,0,0.35),
-              0 1px 8px rgba(255,255,255,0.04);
-            backdrop-filter: blur(12px) saturate(160%);
-            -webkit-backdrop-filter: blur(12px) saturate(160%);
-            transition: all 0.2s ease;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+            box-shadow: 0 2px 0 rgba(255,255,255,0.12) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 8px 32px rgba(0,0,0,0.35), 0 1px 8px rgba(255,255,255,0.04);
+            backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+            transition: all 0.2s ease; text-shadow: 0 1px 3px rgba(0,0,0,0.4);
           }
           .liquid-glass-btn::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 50%;
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%;
             background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, transparent 100%);
-            border-radius: inherit;
-            pointer-events: none;
+            border-radius: inherit; pointer-events: none;
           }
           .liquid-glass-btn::after {
-            content: '';
-            position: absolute;
-            inset: 0;
+            content: ''; position: absolute; inset: 0;
             background: radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.08) 0%, transparent 60%);
             pointer-events: none;
           }
           .liquid-glass-btn:hover {
-            background: linear-gradient(145deg,
-              rgba(255,255,255,0.20) 0%,
-              rgba(255,255,255,0.09) 50%,
-              rgba(255,255,255,0.15) 100%
-            );
+            background: linear-gradient(145deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.15) 100%);
             border-color: rgba(255,255,255,0.28);
-            box-shadow:
-              0 2px 0 rgba(255,255,255,0.16) inset,
-              0 -1px 0 rgba(0,0,0,0.25) inset,
-              0 12px 40px rgba(0,0,0,0.4),
-              0 1px 12px rgba(255,255,255,0.06);
+            box-shadow: 0 2px 0 rgba(255,255,255,0.16) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 12px 40px rgba(0,0,0,0.4), 0 1px 12px rgba(255,255,255,0.06);
           }
-          .liquid-glass-btn:active {
-            transform: scale(0.98);
-            box-shadow:
-              0 1px 0 rgba(255,255,255,0.08) inset,
-              0 -1px 0 rgba(0,0,0,0.25) inset,
-              0 4px 16px rgba(0,0,0,0.3);
-          }
+          .liquid-glass-btn:active { transform: scale(0.98); box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 4px 16px rgba(0,0,0,0.3); }
+          @keyframes bounce-x { 0%,100% { transform: translateX(0); } 50% { transform: translateX(-6px); } }
+          .animate-bounce-x { animation: bounce-x 1.8s ease-in-out infinite; }
         `}} />
+
+        {/* Empty state hint */}
+        {!coverSrc && (
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-neutral-600 text-xs pointer-events-none select-none">
+            <span className="animate-bounce-x">←</span>
+            <span>Carica un&apos;immagine per iniziare</span>
+          </div>
+        )}
+
         <div className="relative group w-full h-full flex items-center justify-center max-w-4xl" style={{ touchAction: 'none' }}>
           {(coverSrc || label.trim() !== '') && (
             <div className="absolute top-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 bg-neutral-800/80 backdrop-blur text-neutral-300 text-xs px-3 py-1.5 rounded-full pointer-events-none border border-white/10 z-20">
