@@ -31,26 +31,25 @@ const FOLDERS = {
   macos: {
     id: 'macos',
     name: 'macOS Custom',
-    url: '/macos-folder-gray.svg',
+    url: '/yellow-folder.svg',
     buildFlapPath: (ctx, w, h) => {
-      const scaleX = w / 1024;
-      const scaleY = h / 1024;
-      const x = 42 * scaleX;
-      const y = 258 * scaleY;
-      const width = 940 * scaleX;
-      const height = 656 * scaleY;
-      const r = 72 * Math.min(scaleX, scaleY);
+      const sX = w / 1024;
+      const sY = h / 1024;
 
       ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + width - r, y);
-      ctx.arcTo(x + width, y, x + width, y + height, r);
-      ctx.lineTo(x + width, y + height - r);
-      ctx.arcTo(x + width, y + height, x, y + height, r);
-      ctx.lineTo(x + r, y + height);
-      ctx.arcTo(x, y + height, x, y, r);
-      ctx.lineTo(x, y + r);
-      ctx.arcTo(x, y, x + width, y, r);
+      ctx.moveTo(174 * sX, 302 * sY);
+      ctx.bezierCurveTo(174 * sX, 269.967 * sY, 199.967 * sX, 244 * sY, 232 * sX, 244 * sY);
+      ctx.lineTo(412 * sX, 244 * sY);
+      ctx.bezierCurveTo(440.167 * sX, 244 * sY, 465.41 * sX, 258.912 * sY, 478.84 * sX, 283.2 * sY);
+      ctx.lineTo(507.16 * sX, 334.8 * sY);
+      ctx.bezierCurveTo(520.59 * sX, 359.088 * sY, 545.833 * sX, 374 * sY, 574 * sX, 374 * sY);
+      ctx.lineTo(792 * sX, 374 * sY);
+      ctx.bezierCurveTo(824.033 * sX, 374 * sY, 850 * sX, 399.967 * sY, 850 * sX, 432 * sY);
+      ctx.lineTo(850 * sX, 774 * sY);
+      ctx.bezierCurveTo(850 * sX, 806.033 * sY, 824.033 * sX, 832 * sY, 792 * sX, 832 * sY);
+      ctx.lineTo(232 * sX, 832 * sY);
+      ctx.bezierCurveTo(199.967 * sX, 832 * sY, 174 * sX, 806.033 * sY, 174 * sX, 774 * sY);
+      ctx.lineTo(174 * sX, 302 * sY);
       ctx.closePath();
     }
   }
