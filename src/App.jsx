@@ -441,7 +441,7 @@ export default function App() {
             <Download size={18} /> Scarica PNG (1024x1024)
           </button>
           <div className="flex flex-col items-center gap-3 pt-6 border-t border-white/5">
-            <span className="text-[10px] text-neutral-500 font-semibold tracking-widest uppercase">Made with love by Antonello :)</span>
+            <span className="text-[10px] text-neutral-500 font-semibold tracking-widest lowercase">Made with love by Antonello :)</span>
             <div className="flex items-center gap-5 text-neutral-400">
               <a href="https://x.com/antonello23" target="_blank" rel="noreferrer" className="hover:text-white transition-colors"><IconX size={16} /></a>
               <a href="https://www.instagram.com/antonelloan23/" target="_blank" rel="noreferrer" className="hover:text-white transition-colors"><IconInstagram size={16} /></a>
