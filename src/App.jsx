@@ -73,6 +73,13 @@ const TAPE_COLORS = [
   { id: 'red', hex: '#f44336', name: 'Rosso' }
 ];
 
+const FONT_OPTIONS = [
+  { id: 'space-mono', family: 'Space Mono', label: 'Mono' },
+  { id: 'inter', family: 'Inter', label: 'Sans' },
+  { id: 'permanent-marker', family: 'Permanent Marker', label: 'Hand' },
+  { id: 'playfair', family: 'Playfair Display', label: 'Serif' },
+];
+
 const rgbToHex = (r, g, b) => '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
 
 const getTapeTextColor = (hex) => {
@@ -92,7 +99,7 @@ const loadSvgAsImage = (svgString) => new Promise((resolve, reject) => {
   img.src = url;
 });
 
-const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY) => {
+const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, tapeRotationDeg, fontSizeMultiplier, fontFamily) => {
   const tapeW = w * 0.55;
   const tapeH = h * 0.12;
   const tapeBaseX = w / 2 - tapeW / 2;
@@ -102,7 +109,7 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY) =
 
   ctx.save();
   ctx.translate(x + tapeW / 2, y + tapeH / 2);
-  ctx.rotate(-0.04);
+  ctx.rotate((tapeRotationDeg * Math.PI) / 180);
   ctx.translate(-(x + tapeW / 2), -(y + tapeH / 2));
 
   ctx.shadowColor = 'rgba(0,0,0,0.3)';
@@ -126,11 +133,11 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY) =
   ctx.fillStyle = getTapeTextColor(tapeHex);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  let fontSize = tapeH * 0.55;
-  ctx.font = `bold ${fontSize}px "Space Mono", monospace, sans-serif`;
-  while (ctx.measureText(text).width > tapeW * 0.8 && fontSize > 10) {
+  let fontSize = tapeH * 0.55 * fontSizeMultiplier;
+  ctx.font = `bold ${fontSize}px "${fontFamily}", sans-serif`;
+  while (ctx.measureText(text).width > tapeW * 0.85 && fontSize > 10) {
     fontSize -= 2;
-    ctx.font = `bold ${fontSize}px "Space Mono", monospace, sans-serif`;
+    ctx.font = `bold ${fontSize}px "${fontFamily}", sans-serif`;
   }
   ctx.fillText(text, x + tapeW / 2, y + tapeH / 2);
   ctx.restore();
@@ -158,6 +165,9 @@ export default function App() {
   const [label, setLabel] = useState('Archivio 01');
   const [tapeColor, setTapeColor] = useState('#f4ebd0');
   const [tapeOpacity, setTapeOpacity] = useState(1);
+  const [tapeRotation, setTapeRotation] = useState(-2.3);
+  const [fontSizeMultiplier, setFontSizeMultiplier] = useState(1);
+  const [fontFamily, setFontFamily] = useState('Space Mono');
   const [dominantColor, setDominantColor] = useState('#4a90e2');
   const folderShape = 'classic';
   const [coverOffset, setCoverOffset] = useState({ x: 0, y: 0 });
@@ -169,7 +179,7 @@ export default function App() {
 
   useEffect(() => {
     const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap';
+    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&family=Playfair+Display:wght@700&display=swap';
     link.rel = 'stylesheet';
     document.head.appendChild(link);
   }, []);
@@ -318,14 +328,14 @@ export default function App() {
       }
 
       if (label.trim() !== '') {
-        drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y);
+        drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
       }
     };
 
     render();
     const t = setTimeout(render, 300);
     return () => clearTimeout(t);
-  }, [baseImgData, coverSrc, label, tapeColor, tapeOpacity, dominantColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape]);
+  }, [baseImgData, coverSrc, label, tapeColor, tapeOpacity, dominantColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -421,6 +431,54 @@ export default function App() {
             </div>
             {label.trim() !== '' && (
               <>
+                {/* Font family */}
+                <div className="space-y-2 pt-1">
+                  <label className="text-xs text-neutral-500">Font</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {FONT_OPTIONS.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setFontFamily(opt.family)}
+                        className={`py-2 px-1 rounded-lg border text-xs transition-all ${
+                          fontFamily === opt.family
+                            ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                            : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                        }`}
+                        style={{ fontFamily: opt.family }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Font size */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-xs text-neutral-400">
+                    <span className="flex items-center gap-1"><Type size={13} /> Dimensione</span>
+                    <span>{Math.round(fontSizeMultiplier * 100)}%</span>
+                  </div>
+                  <input type="range" min="0.4" max="1.6" step="0.05" value={fontSizeMultiplier} onChange={e => setFontSizeMultiplier(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                </div>
+
+                {/* Tape rotation */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-xs text-neutral-400">
+                    <span className="flex items-center gap-1"><RotateCw size={13} /> Inclinazione nastro</span>
+                    <div className="flex items-center gap-1">
+                      <span>{tapeRotation.toFixed(1)}°</span>
+                      {tapeRotation !== -2.3 && (
+                        <button onClick={() => setTapeRotation(-2.3)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title="Ripristina">
+                          <RotateCcw size={10} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <input type="range" min="-15" max="15" step="0.5" value={tapeRotation} onChange={e => setTapeRotation(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                </div>
+
                 <div className="flex items-center justify-between">
                   <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
                     <Move size={11} className="shrink-0" />
@@ -436,6 +494,7 @@ export default function App() {
                     </button>
                   )}
                 </div>
+
                 <div className="space-y-2 pt-2">
                   <label className="text-xs text-neutral-500 flex items-center gap-1"><Palette size={14} /> Colore Nastro</label>
                   <div className="flex gap-3 items-center">
@@ -447,7 +506,6 @@ export default function App() {
                         {tapeColor === color.hex && <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />}
                       </button>
                     ))}
-                    {/* Free color picker */}
                     <label
                       className={`relative w-8 h-8 rounded-full border-2 cursor-pointer flex items-center justify-center overflow-hidden transition-all hover:scale-105 ${
                         !isPresetColor ? 'border-blue-500 scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
@@ -461,6 +519,7 @@ export default function App() {
                     </label>
                   </div>
                 </div>
+
                 <div className="space-y-2 pt-4 border-t border-white/5">
                   <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
                     <span className="flex items-center gap-1"><Droplet size={14} /> Opacità Nastro</span>
@@ -523,7 +582,6 @@ export default function App() {
           .animate-bounce-x { animation: bounce-x 1.8s ease-in-out infinite; }
         `}} />
 
-        {/* Empty state hint */}
         {!coverSrc && (
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-neutral-600 text-xs pointer-events-none select-none">
             <span className="animate-bounce-x">←</span>
