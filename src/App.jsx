@@ -151,7 +151,7 @@ export default function App() {
   const [tapeColor, setTapeColor] = useState('#f4ebd0');
   const [tapeOpacity, setTapeOpacity] = useState(1);
   const [dominantColor, setDominantColor] = useState('#4a90e2');
-  const [folderShape, setFolderShape] = useState('classic');
+  const folderShape = 'classic';
   const [coverOffset, setCoverOffset] = useState({ x: 0, y: 0 });
   const [coverScale, setCoverScale] = useState(1);
   const [coverRotation, setCoverRotation] = useState(0);
@@ -359,20 +359,6 @@ export default function App() {
                   </label>
                 </div>
               )}
-            </div>
-
-            {/* Folder style selector */}
-            <div className="flex gap-2">
-              {Object.values(FOLDERS).map(f => (
-                <button key={f.id} onClick={() => setFolderShape(f.id)}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all border ${
-                    folderShape === f.id
-                      ? 'bg-blue-600/20 border-blue-500/60 text-blue-300'
-                      : 'bg-[#09090b] border-neutral-700/50 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'
-                  }`}>
-                  {f.name}
-                </button>
-              ))}
             </div>
 
             <label className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all bg-[#09090b] border border-neutral-700/50 border-dashed rounded-xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 group">
