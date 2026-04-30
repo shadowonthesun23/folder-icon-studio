@@ -298,17 +298,11 @@ export default function App() {
         ctx.drawImage(coverImg, drawX, drawY, drawW, drawH);
         ctx.restore();
 
-        ctx.globalCompositeOperation = 'multiply';
-        ctx.globalAlpha = 0.4;
-        ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
-
         const shadow = ctx.createLinearGradient(0, rectY, 0, rectY + rectH);
-        shadow.addColorStop(0, 'rgba(255,255,255,0.1)');
-        shadow.addColorStop(0.08, 'rgba(0,0,0,0)');
-        shadow.addColorStop(0.92, 'rgba(0,0,0,0)');
-        shadow.addColorStop(1, 'rgba(0,0,0,0.3)');
+        shadow.addColorStop(0, 'rgba(255,255,255,0.15)');
+        shadow.addColorStop(0.1, 'rgba(0,0,0,0)');
+        shadow.addColorStop(0.9, 'rgba(0,0,0,0)');
+        shadow.addColorStop(1, 'rgba(0,0,0,0.35)');
         ctx.fillStyle = shadow;
         ctx.fillRect(rectX, rectY, rectW, rectH);
 
