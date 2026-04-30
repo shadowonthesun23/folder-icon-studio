@@ -165,7 +165,6 @@ export default function App() {
     document.head.appendChild(link);
   }, []);
 
-  // Carica l'SVG della cartella come Blob URL (più affidabile per filtri complessi su canvas)
   useEffect(() => {
     const shape = FOLDERS[folderShape];
     setBaseImgData(null);
@@ -254,11 +253,9 @@ export default function App() {
       const shape = FOLDERS[folderShape];
       const folderRect = shape.getFolderRect(w, h);
 
-      // 1. Disegna folder base (back + front panel visibili)
       ctx.save();
       ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
 
-      // Tint colore dominante solo per stili che lo prevedono (es. classic grigia)
       if (coverSrc && shape.tintFolder) {
         ctx.globalCompositeOperation = 'color';
         ctx.fillStyle = dominantColor;
@@ -275,7 +272,6 @@ export default function App() {
           img.src = coverSrc;
         });
 
-        // 2. Clippa al pannello frontale e disegna l'immagine utente
         ctx.save();
         shape.buildFlapPath(ctx, folderRect);
         ctx.clip();
@@ -301,15 +297,12 @@ export default function App() {
         ctx.drawImage(coverImg, drawX, drawY, drawW, drawH);
         ctx.restore();
 
-        // 3. Sovrapponi il folder in multiply sul pannello frontale
-        //    → ripristina gradiente e profondità della cartella sull'immagine
         ctx.globalCompositeOperation = 'multiply';
         ctx.globalAlpha = 0.75;
         ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
 
-        // 4. Vignetta sottile
         const shadow = ctx.createLinearGradient(0, rectY, 0, rectY + rectH);
         shadow.addColorStop(0, 'rgba(255,255,255,0.1)');
         shadow.addColorStop(0.08, 'rgba(0,0,0,0)');
@@ -318,7 +311,7 @@ export default function App() {
         ctx.fillStyle = shadow;
         ctx.fillRect(rectX, rectY, rectW, rectH);
 
-        ctx.restore(); // rimuove il clip
+        ctx.restore();
       }
 
       if (label.trim() !== '') {
@@ -347,7 +340,10 @@ export default function App() {
 
       <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[45dvh] lg:h-full overflow-y-auto custom-scrollbar">
         <div className="p-6 lg:p-8 pb-4 lg:pb-6 border-b border-white/5 shrink-0">
-          <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-white">Folder Icon Studio</h1>
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-white">Folder Icon Studio</h1>
+            <img src="/logo.png" alt="Folder Icon Studio" className="w-8 h-8 lg:w-10 lg:h-10 object-contain shrink-0" />
+          </div>
           <p className="text-neutral-400 text-xs lg:text-sm mt-1">Crea icone macOS customizzate.</p>
         </div>
 
