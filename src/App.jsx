@@ -340,9 +340,9 @@ export default function App() {
 
       <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[45dvh] lg:h-full overflow-y-auto custom-scrollbar">
         <div className="p-6 lg:p-8 pb-4 lg:pb-6 border-b border-white/5 shrink-0">
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-white">Folder Icon Studio</h1>
+          <div className="flex items-center gap-3">
             <img src="/logo.png" alt="Folder Icon Studio" className="w-8 h-8 lg:w-10 lg:h-10 object-contain shrink-0" />
+            <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-white">Folder Icon Studio</h1>
           </div>
           <p className="text-neutral-400 text-xs lg:text-sm mt-1">Crea icone macOS customizzate.</p>
         </div>
