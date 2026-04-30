@@ -143,6 +143,59 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, t
   ctx.restore();
 };
 
+const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontSizeMultiplier, fontFamily) => {
+  const { clipRect } = shape;
+  const scaleX = folderRect.w / clipRect.vw;
+  const scaleY = folderRect.h / clipRect.vh;
+  const rectX = folderRect.x + clipRect.x * scaleX;
+  const rectY = folderRect.y + clipRect.y * scaleY;
+  const rectW = clipRect.w * scaleX;
+  const rectH = clipRect.h * scaleY;
+
+  const bannerH = rectH * 0.30;
+  const bannerY = rectY + rectH - bannerH;
+
+  ctx.save();
+  shape.buildFlapPath(ctx, folderRect);
+  ctx.clip();
+
+  // background
+  ctx.globalAlpha = opacity;
+  ctx.fillStyle = tapeHex;
+  ctx.fillRect(rectX, bannerY, rectW, bannerH);
+  ctx.globalAlpha = 1;
+
+  // word-wrap into max 2 lines
+  const textColor = getTapeTextColor(tapeHex);
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const words = text.split(' ');
+  let lines = [text];
+  let baseFontSize = bannerH * 0.28 * fontSizeMultiplier;
+  ctx.font = `bold ${baseFontSize}px "${fontFamily}", sans-serif`;
+
+  if (words.length > 1 && ctx.measureText(text).width > rectW * 0.88) {
+    const mid = Math.ceil(words.length / 2);
+    lines = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+  }
+
+  const lineCount = lines.length;
+  lines.forEach((line, i) => {
+    let fs = baseFontSize;
+    ctx.font = `bold ${fs}px "${fontFamily}", sans-serif`;
+    while (ctx.measureText(line).width > rectW * 0.88 && fs > 10) {
+      fs -= 2;
+      ctx.font = `bold ${fs}px "${fontFamily}", sans-serif`;
+    }
+    const lineY = bannerY + bannerH * ((i + 1) / (lineCount + 1));
+    ctx.fillText(line, rectX + rectW / 2, lineY);
+  });
+
+  ctx.restore();
+};
+
 const IconX = ({ size = 16, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M4 4l11.733 16h4.267L8.267 4z" />
@@ -163,6 +216,7 @@ export default function App() {
   const [baseImgData, setBaseImgData] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
   const [label, setLabel] = useState('Archivio 01');
+  const [labelStyle, setLabelStyle] = useState('dymo');
   const [tapeColor, setTapeColor] = useState('#f4ebd0');
   const [tapeOpacity, setTapeOpacity] = useState(1);
   const [tapeRotation, setTapeRotation] = useState(-2.3);
@@ -229,12 +283,16 @@ export default function App() {
     const clientY = e.clientY;
     const x = (clientX - rect.left) * scaleX;
     const y = (clientY - rect.top) * scaleY;
-    const tapeW = canvas.width * 0.55;
-    const tapeH = canvas.height * 0.12;
-    const tX = canvas.width / 2 - tapeW / 2 + tapeOffset.x;
-    const tY = canvas.height * 0.55 - tapeH / 2 + tapeOffset.y;
-    if (label.trim() !== '' && x >= tX && x <= tX + tapeW && y >= tY && y <= tY + tapeH) {
-      setDragging('tape');
+    if (labelStyle === 'dymo') {
+      const tapeW = canvas.width * 0.55;
+      const tapeH = canvas.height * 0.12;
+      const tX = canvas.width / 2 - tapeW / 2 + tapeOffset.x;
+      const tY = canvas.height * 0.55 - tapeH / 2 + tapeOffset.y;
+      if (label.trim() !== '' && x >= tX && x <= tX + tapeW && y >= tY && y <= tY + tapeH) {
+        setDragging('tape');
+      } else if (coverSrc) {
+        setDragging('cover');
+      }
     } else if (coverSrc) {
       setDragging('cover');
     }
@@ -328,14 +386,18 @@ export default function App() {
       }
 
       if (label.trim() !== '') {
-        drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
+        if (labelStyle === 'dymo') {
+          drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
+        } else {
+          drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
+        }
       }
     };
 
     render();
     const t = setTimeout(render, 300);
     return () => clearTimeout(t);
-  }, [baseImgData, coverSrc, label, tapeColor, tapeOpacity, dominantColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, coverSrc, label, labelStyle, tapeColor, tapeOpacity, dominantColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -418,6 +480,31 @@ export default function App() {
             <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
               <Type size={16} /> 2. Etichetta
             </h2>
+
+            {/* Label style toggle */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setLabelStyle('dymo')}
+                className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
+                  labelStyle === 'dymo'
+                    ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                    : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                }`}
+              >
+                🏷️ Dymo
+              </button>
+              <button
+                onClick={() => setLabelStyle('banner')}
+                className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
+                  labelStyle === 'banner'
+                    ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                    : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                }`}
+              >
+                ▬ Fascia
+              </button>
+            </div>
+
             <div className="space-y-2">
               <label className="text-xs text-neutral-500">Testo (lascia vuoto per nascondere)</label>
               <input
@@ -429,6 +516,7 @@ export default function App() {
                 placeholder="Es. Progetto X"
               />
             </div>
+
             {label.trim() !== '' && (
               <>
                 {/* Font family */}
@@ -462,41 +550,46 @@ export default function App() {
                     className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                 </div>
 
-                {/* Tape rotation */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-xs text-neutral-400">
-                    <span className="flex items-center gap-1"><RotateCw size={13} /> Inclinazione nastro</span>
-                    <div className="flex items-center gap-1">
-                      <span>{tapeRotation.toFixed(1)}°</span>
-                      {tapeRotation !== -2.3 && (
-                        <button onClick={() => setTapeRotation(-2.3)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title="Ripristina">
-                          <RotateCcw size={10} />
-                        </button>
-                      )}
+                {/* Tape rotation — only for dymo */}
+                {labelStyle === 'dymo' && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs text-neutral-400">
+                      <span className="flex items-center gap-1"><RotateCw size={13} /> Inclinazione nastro</span>
+                      <div className="flex items-center gap-1">
+                        <span>{tapeRotation.toFixed(1)}°</span>
+                        {tapeRotation !== -2.3 && (
+                          <button onClick={() => setTapeRotation(-2.3)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title="Ripristina">
+                            <RotateCcw size={10} />
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    <input type="range" min="-15" max="15" step="0.5" value={tapeRotation} onChange={e => setTapeRotation(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   </div>
-                  <input type="range" min="-15" max="15" step="0.5" value={tapeRotation} onChange={e => setTapeRotation(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                </div>
+                )}
 
-                <div className="flex items-center justify-between">
-                  <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-                    <Move size={11} className="shrink-0" />
-                    Trascina l&apos;etichetta in anteprima per riposizionarla
-                  </p>
-                  {(tapeOffset.x !== 0 || tapeOffset.y !== 0) && (
-                    <button
-                      onClick={() => setTapeOffset({ x: 0, y: 0 })}
-                      className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0"
-                      title="Ripristina posizione"
-                    >
-                      <RotateCcw size={10} /> reset
-                    </button>
-                  )}
-                </div>
+                {/* Drag hint — only for dymo */}
+                {labelStyle === 'dymo' && (
+                  <div className="flex items-center justify-between">
+                    <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                      <Move size={11} className="shrink-0" />
+                      Trascina l&apos;etichetta in anteprima per riposizionarla
+                    </p>
+                    {(tapeOffset.x !== 0 || tapeOffset.y !== 0) && (
+                      <button
+                        onClick={() => setTapeOffset({ x: 0, y: 0 })}
+                        className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0"
+                        title="Ripristina posizione"
+                      >
+                        <RotateCcw size={10} /> reset
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-2 pt-2">
-                  <label className="text-xs text-neutral-500 flex items-center gap-1"><Palette size={14} /> Colore Nastro</label>
+                  <label className="text-xs text-neutral-500 flex items-center gap-1"><Palette size={14} /> Colore {labelStyle === 'banner' ? 'Fascia' : 'Nastro'}</label>
                   <div className="flex gap-3 items-center">
                     {TAPE_COLORS.map(color => (
                       <button key={color.id} onClick={() => setTapeColor(color.hex)}
@@ -522,7 +615,7 @@ export default function App() {
 
                 <div className="space-y-2 pt-4 border-t border-white/5">
                   <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
-                    <span className="flex items-center gap-1"><Droplet size={14} /> Opacità Nastro</span>
+                    <span className="flex items-center gap-1"><Droplet size={14} /> Opacità</span>
                     <span>{Math.round(tapeOpacity * 100)}%</span>
                   </div>
                   <input type="range" min="0.1" max="1" step="0.05" value={tapeOpacity} onChange={e => setTapeOpacity(parseFloat(e.target.value))}
