@@ -2,6 +2,67 @@ import { useState, useEffect, useRef } from 'react';
 import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
+const TRANSLATIONS = {
+  it: {
+    subtitle: 'Crea icone macOS customizzate.',
+    section1: '1. Grafica',
+    backColor: 'Sfondo retro',
+    changeImage: 'Cambia immagine',
+    uploadImage: 'Carica Immagine',
+    uploadFormats: 'JPG, PNG, WEBP',
+    zoom: 'Zoom',
+    rotation: 'Rotazione',
+    section2: '2. Etichetta',
+    styleDymo: '\uD83C\uDFF7\uFE0F Dymo',
+    styleBanner: '\u25AC Fascia',
+    labelText: 'Testo (lascia vuoto per nascondere)',
+    labelPlaceholder: 'Es. Progetto X',
+    font: 'Font',
+    fontSize: 'Dimensione',
+    tapeAngle: 'Inclinazione nastro',
+    resetTip: 'Ripristina',
+    resetBtn: 'reset',
+    dragHint: "Trascina l\u2019etichetta in anteprima per riposizionarla",
+    colorTape: 'Colore Nastro',
+    colorBanner: 'Colore Fascia',
+    opacity: 'Opacit\u00e0',
+    download: 'Scarica PNG (1024x1024)',
+    uploadHint: "Carica un\u2019immagine per iniziare",
+    dragCanvasHint: 'Clicca e trascina per posizionare',
+    customColor: 'Colore personalizzato',
+    coverRotation: 'Rotazione',
+  },
+  en: {
+    subtitle: 'Create custom macOS icons.',
+    section1: '1. Artwork',
+    backColor: 'Back color',
+    changeImage: 'Change Image',
+    uploadImage: 'Upload Image',
+    uploadFormats: 'JPG, PNG, WEBP',
+    zoom: 'Zoom',
+    rotation: 'Rotation',
+    section2: '2. Label',
+    styleDymo: '\uD83C\uDFF7\uFE0F Dymo',
+    styleBanner: '\u25AC Banner',
+    labelText: 'Text (leave empty to hide)',
+    labelPlaceholder: 'e.g. Project X',
+    font: 'Font',
+    fontSize: 'Size',
+    tapeAngle: 'Tape angle',
+    resetTip: 'Reset',
+    resetBtn: 'reset',
+    dragHint: 'Drag the label on the preview to reposition it',
+    colorTape: 'Tape Color',
+    colorBanner: 'Banner Color',
+    opacity: 'Opacity',
+    download: 'Download PNG (1024x1024)',
+    uploadHint: 'Upload an image to get started',
+    dragCanvasHint: 'Click and drag to position',
+    customColor: 'Custom color',
+    coverRotation: 'Rotation',
+  }
+};
+
 const FOLDERS = {
   classic: {
     id: 'classic',
@@ -159,13 +220,11 @@ const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontSizeMult
   shape.buildFlapPath(ctx, folderRect);
   ctx.clip();
 
-  // background
   ctx.globalAlpha = opacity;
   ctx.fillStyle = tapeHex;
   ctx.fillRect(rectX, bannerY, rectW, bannerH);
   ctx.globalAlpha = 1;
 
-  // word-wrap into max 2 lines
   const textColor = getTapeTextColor(tapeHex);
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
@@ -230,6 +289,16 @@ export default function App() {
   const [tapeOffset, setTapeOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(null);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  const [lang, setLang] = useState(() => {
+    try { return localStorage.getItem('fis_lang') || 'it'; } catch { return 'it'; }
+  });
+
+  const t = TRANSLATIONS[lang];
+
+  const switchLang = (l) => {
+    setLang(l);
+    try { localStorage.setItem('fis_lang', l); } catch {}
+  };
 
   useEffect(() => {
     const link = document.createElement('link');
@@ -279,10 +348,8 @@ export default function App() {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const clientX = e.clientX;
-    const clientY = e.clientY;
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
     if (labelStyle === 'dymo') {
       const tapeW = canvas.width * 0.55;
       const tapeH = canvas.height * 0.12;
@@ -296,7 +363,7 @@ export default function App() {
     } else if (coverSrc) {
       setDragging('cover');
     }
-    setDragStartPos({ x: clientX, y: clientY });
+    setDragStartPos({ x: e.clientX, y: e.clientY });
     if (e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId);
   };
 
@@ -332,7 +399,6 @@ export default function App() {
 
       ctx.save();
       ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
-
       if (coverSrc && shape.tintFolder) {
         ctx.globalCompositeOperation = 'color';
         ctx.fillStyle = dominantColor;
@@ -381,7 +447,6 @@ export default function App() {
         shadow.addColorStop(1, 'rgba(0,0,0,0.35)');
         ctx.fillStyle = shadow;
         ctx.fillRect(rectX, rectY, rectW, rectH);
-
         ctx.restore();
       }
 
@@ -395,14 +460,14 @@ export default function App() {
     };
 
     render();
-    const t = setTimeout(render, 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(render, 300);
+    return () => clearTimeout(timer);
   }, [baseImgData, coverSrc, label, labelStyle, tapeColor, tapeOpacity, dominantColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const name = label.trim() === '' ? 'icona' : label;
+    const name = label.trim() === '' ? 'icon' : label;
     const link = document.createElement('a');
     link.download = `folder_${name.replace(/\s+/g, '_').toLowerCase()}.png`;
     link.href = canvas.toDataURL('image/png');
@@ -417,23 +482,41 @@ export default function App() {
 
       <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[45dvh] lg:h-full overflow-y-auto custom-scrollbar">
         <div className="p-6 lg:p-8 pb-4 lg:pb-6 border-b border-white/5 shrink-0">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Folder Icon Studio" className="w-8 h-8 lg:w-10 lg:h-10 object-contain shrink-0" />
-            <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-white">Folder Icon Studio</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="Folder Icon Studio" className="w-8 h-8 lg:w-10 lg:h-10 object-contain shrink-0" />
+              <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-white">Folder Icon Studio</h1>
+            </div>
+            {/* Language toggle */}
+            <div className="flex items-center gap-1 bg-[#09090b] border border-neutral-800 rounded-lg p-1 shrink-0">
+              {['it', 'en'].map(l => (
+                <button
+                  key={l}
+                  onClick={() => switchLang(l)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold tracking-wide transition-all ${
+                    lang === l
+                      ? 'bg-neutral-700 text-white'
+                      : 'text-neutral-500 hover:text-neutral-300'
+                  }`}
+                >
+                  {l.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
-          <p className="text-neutral-400 text-xs lg:text-sm mt-1">Crea icone macOS customizzate.</p>
+          <p className="text-neutral-400 text-xs lg:text-sm mt-1">{t.subtitle}</p>
         </div>
 
         <div className="p-6 lg:p-8 flex flex-col gap-6 lg:gap-8">
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
-                <LucideImage size={16} /> 1. Grafica
+                <LucideImage size={16} /> {t.section1}
               </h2>
               {coverSrc && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-neutral-500">Sfondo retro</span>
-                  <label className="relative flex items-center justify-center w-6 h-6 rounded-full border border-white/20 shadow-sm cursor-pointer overflow-hidden transition-transform hover:scale-110" title="Colore sfondo retro cartella">
+                  <span className="text-[10px] text-neutral-500">{t.backColor}</span>
+                  <label className="relative flex items-center justify-center w-6 h-6 rounded-full border border-white/20 shadow-sm cursor-pointer overflow-hidden transition-transform hover:scale-110">
                     <input type="color" value={dominantColor} onChange={e => setDominantColor(e.target.value)} className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer" />
                     <div className="w-full h-full pointer-events-none" style={{ backgroundColor: dominantColor }} />
                   </label>
@@ -446,8 +529,8 @@ export default function App() {
                 <div className="p-3 bg-neutral-800 rounded-full group-hover:bg-blue-500/20 transition-colors">
                   <Upload size={20} className="text-neutral-400 group-hover:text-blue-400" />
                 </div>
-                <span className="font-medium text-sm text-neutral-300">{coverSrc ? 'Cambia immagine' : 'Carica Immagine'}</span>
-                <span className="text-xs text-neutral-500">JPG, PNG, WEBP</span>
+                <span className="font-medium text-sm text-neutral-300">{coverSrc ? t.changeImage : t.uploadImage}</span>
+                <span className="text-xs text-neutral-500">{t.uploadFormats}</span>
               </div>
               <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
             </label>
@@ -456,7 +539,7 @@ export default function App() {
               <div className="bg-[#09090b] p-4 rounded-xl border border-neutral-800/50 space-y-4">
                 <div>
                   <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
-                    <span className="flex items-center gap-1"><ZoomIn size={14} /> Zoom</span>
+                    <span className="flex items-center gap-1"><ZoomIn size={14} /> {t.zoom}</span>
                     <span>{Math.round(coverScale * 100)}%</span>
                   </div>
                   <input type="range" min="0.5" max="2.5" step="0.05" value={coverScale} onChange={e => setCoverScale(parseFloat(e.target.value))}
@@ -464,7 +547,7 @@ export default function App() {
                 </div>
                 <div>
                   <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
-                    <span className="flex items-center gap-1"><RotateCw size={14} /> Rotazione</span>
+                    <span className="flex items-center gap-1"><RotateCw size={14} /> {t.coverRotation}</span>
                     <span>{coverRotation}°</span>
                   </div>
                   <input type="range" min="-180" max="180" step="1" value={coverRotation} onChange={e => setCoverRotation(parseInt(e.target.value))}
@@ -478,87 +561,67 @@ export default function App() {
 
           <section className="space-y-4">
             <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
-              <Type size={16} /> 2. Etichetta
+              <Type size={16} /> {t.section2}
             </h2>
 
-            {/* Label style toggle */}
             <div className="flex gap-2">
-              <button
-                onClick={() => setLabelStyle('dymo')}
+              <button onClick={() => setLabelStyle('dymo')}
                 className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
-                  labelStyle === 'dymo'
-                    ? 'border-blue-500 bg-blue-500/10 text-blue-300'
-                    : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                }`}
-              >
-                🏷️ Dymo
+                  labelStyle === 'dymo' ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                }`}>
+                {t.styleDymo}
               </button>
-              <button
-                onClick={() => setLabelStyle('banner')}
+              <button onClick={() => setLabelStyle('banner')}
                 className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
-                  labelStyle === 'banner'
-                    ? 'border-blue-500 bg-blue-500/10 text-blue-300'
-                    : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                }`}
-              >
-                ▬ Fascia
+                  labelStyle === 'banner' ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                }`}>
+                {t.styleBanner}
               </button>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-neutral-500">Testo (lascia vuoto per nascondere)</label>
+              <label className="text-xs text-neutral-500">{t.labelText}</label>
               <input
-                type="text"
-                value={label}
-                maxLength={30}
+                type="text" value={label} maxLength={30}
                 onChange={e => setLabel(e.target.value)}
                 className="w-full bg-[#09090b] border border-neutral-700/50 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all"
-                placeholder="Es. Progetto X"
+                placeholder={t.labelPlaceholder}
               />
             </div>
 
             {label.trim() !== '' && (
               <>
-                {/* Font family */}
                 <div className="space-y-2 pt-1">
-                  <label className="text-xs text-neutral-500">Font</label>
+                  <label className="text-xs text-neutral-500">{t.font}</label>
                   <div className="grid grid-cols-4 gap-2">
                     {FONT_OPTIONS.map(opt => (
-                      <button
-                        key={opt.id}
-                        onClick={() => setFontFamily(opt.family)}
+                      <button key={opt.id} onClick={() => setFontFamily(opt.family)}
                         className={`py-2 px-1 rounded-lg border text-xs transition-all ${
-                          fontFamily === opt.family
-                            ? 'border-blue-500 bg-blue-500/10 text-blue-300'
-                            : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                        }`}
-                        style={{ fontFamily: opt.family }}
-                      >
+                          fontFamily === opt.family ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                        }`} style={{ fontFamily: opt.family }}>
                         {opt.label}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Font size */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-xs text-neutral-400">
-                    <span className="flex items-center gap-1"><Type size={13} /> Dimensione</span>
+                    <span className="flex items-center gap-1"><Type size={13} /> {t.fontSize}</span>
                     <span>{Math.round(fontSizeMultiplier * 100)}%</span>
                   </div>
                   <input type="range" min="0.4" max="1.6" step="0.05" value={fontSizeMultiplier} onChange={e => setFontSizeMultiplier(parseFloat(e.target.value))}
                     className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                 </div>
 
-                {/* Tape rotation — only for dymo */}
                 {labelStyle === 'dymo' && (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-xs text-neutral-400">
-                      <span className="flex items-center gap-1"><RotateCw size={13} /> Inclinazione nastro</span>
+                      <span className="flex items-center gap-1"><RotateCw size={13} /> {t.tapeAngle}</span>
                       <div className="flex items-center gap-1">
                         <span>{tapeRotation.toFixed(1)}°</span>
                         {tapeRotation !== -2.3 && (
-                          <button onClick={() => setTapeRotation(-2.3)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title="Ripristina">
+                          <button onClick={() => setTapeRotation(-2.3)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
                             <RotateCcw size={10} />
                           </button>
                         )}
@@ -569,27 +632,24 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Drag hint — only for dymo */}
                 {labelStyle === 'dymo' && (
                   <div className="flex items-center justify-between">
                     <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-                      <Move size={11} className="shrink-0" />
-                      Trascina l&apos;etichetta in anteprima per riposizionarla
+                      <Move size={11} className="shrink-0" /> {t.dragHint}
                     </p>
                     {(tapeOffset.x !== 0 || tapeOffset.y !== 0) && (
-                      <button
-                        onClick={() => setTapeOffset({ x: 0, y: 0 })}
-                        className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0"
-                        title="Ripristina posizione"
-                      >
-                        <RotateCcw size={10} /> reset
+                      <button onClick={() => setTapeOffset({ x: 0, y: 0 })}
+                        className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0">
+                        <RotateCcw size={10} /> {t.resetBtn}
                       </button>
                     )}
                   </div>
                 )}
 
                 <div className="space-y-2 pt-2">
-                  <label className="text-xs text-neutral-500 flex items-center gap-1"><Palette size={14} /> Colore {labelStyle === 'banner' ? 'Fascia' : 'Nastro'}</label>
+                  <label className="text-xs text-neutral-500 flex items-center gap-1">
+                    <Palette size={14} /> {labelStyle === 'banner' ? t.colorBanner : t.colorTape}
+                  </label>
                   <div className="flex gap-3 items-center">
                     {TAPE_COLORS.map(color => (
                       <button key={color.id} onClick={() => setTapeColor(color.hex)}
@@ -604,7 +664,7 @@ export default function App() {
                         !isPresetColor ? 'border-blue-500 scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
                       }`}
                       style={!isPresetColor ? { backgroundColor: tapeColor } : {}}
-                      title="Colore personalizzato"
+                      title={t.customColor}
                     >
                       <input type="color" value={tapeColor} onChange={e => setTapeColor(e.target.value)} className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer" />
                       {isPresetColor && <Palette size={12} className="text-neutral-400 pointer-events-none" />}
@@ -615,7 +675,7 @@ export default function App() {
 
                 <div className="space-y-2 pt-4 border-t border-white/5">
                   <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
-                    <span className="flex items-center gap-1"><Droplet size={14} /> Opacità</span>
+                    <span className="flex items-center gap-1"><Droplet size={14} /> {t.opacity}</span>
                     <span>{Math.round(tapeOpacity * 100)}%</span>
                   </div>
                   <input type="range" min="0.1" max="1" step="0.05" value={tapeOpacity} onChange={e => setTapeOpacity(parseFloat(e.target.value))}
@@ -628,7 +688,7 @@ export default function App() {
 
         <div className="mt-auto p-6 lg:p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
           <button onClick={handleDownload} className="liquid-glass-btn w-full font-medium py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 mb-6">
-            <Download size={18} /> Scarica PNG (1024x1024)
+            <Download size={18} /> {t.download}
           </button>
           <div className="flex flex-col items-center gap-3 pt-6 border-t border-white/5">
             <span className="text-[10px] text-neutral-500 font-mono tracking-widest lowercase">made with love by antonello :)</span>
@@ -678,14 +738,14 @@ export default function App() {
         {!coverSrc && (
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-neutral-600 text-xs pointer-events-none select-none">
             <span className="animate-bounce-x">←</span>
-            <span>Carica un&apos;immagine per iniziare</span>
+            <span>{t.uploadHint}</span>
           </div>
         )}
 
         <div className="relative group w-full h-full flex items-center justify-center max-w-4xl" style={{ touchAction: 'none' }}>
           {(coverSrc || label.trim() !== '') && (
             <div className="absolute top-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 bg-neutral-800/80 backdrop-blur text-neutral-300 text-xs px-3 py-1.5 rounded-full pointer-events-none border border-white/10 z-20">
-              <Move size={12} /> Clicca e trascina per posizionare
+              <Move size={12} /> {t.dragCanvasHint}
             </div>
           )}
           <canvas ref={canvasRef} width={1024} height={1024}
