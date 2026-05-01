@@ -272,6 +272,7 @@ const IconInstagram = ({ size = 16, className = '' }) => (
 
 export default function App() {
   const canvasRef = useRef(null);
+  const coverImgRef = useRef(null);
   const [baseImgData, setBaseImgData] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
   const [label, setLabel] = useState('Archivio 01');
@@ -314,6 +315,17 @@ export default function App() {
       .then(img => setBaseImgData(img))
       .catch(err => console.error('Folder load error:', err));
   }, [folderShape]);
+
+  // Cache dell'immagine copertina: si aggiorna solo quando cambia coverSrc
+  useEffect(() => {
+    if (!coverSrc) {
+      coverImgRef.current = null;
+      return;
+    }
+    const img = new Image();
+    img.onload = () => { coverImgRef.current = img; };
+    img.src = coverSrc;
+  }, [coverSrc]);
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -392,7 +404,7 @@ export default function App() {
     const w = canvas.width;
     const h = canvas.height;
 
-    const render = async () => {
+    const render = () => {
       ctx.clearRect(0, 0, w, h);
       const shape = FOLDERS[folderShape];
       const folderRect = shape.getFolderRect(w, h);
@@ -408,13 +420,8 @@ export default function App() {
       }
       ctx.restore();
 
-      if (coverSrc) {
-        const coverImg = await new Promise(res => {
-          const img = new Image();
-          img.onload = () => res(img);
-          img.src = coverSrc;
-        });
-
+      const coverImg = coverImgRef.current;
+      if (coverSrc && coverImg) {
         ctx.save();
         shape.buildFlapPath(ctx, folderRect);
         ctx.clip();
@@ -460,8 +467,6 @@ export default function App() {
     };
 
     render();
-    const timer = setTimeout(render, 300);
-    return () => clearTimeout(timer);
   }, [baseImgData, coverSrc, label, labelStyle, tapeColor, tapeOpacity, dominantColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const handleDownload = () => {
