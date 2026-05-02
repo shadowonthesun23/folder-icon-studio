@@ -180,7 +180,6 @@ const FOLDERS = {
       vw: CASSETTE_PNG_W,
       vh: CASSETTE_PNG_H,
     },
-    // buildFlapPath usato solo per banner label — NON per clippare l'immagine utente
     buildFlapPath: (ctx, rect) => {
       const sX = rect.w / CASSETTE_PNG_W;
       const sY = rect.h / CASSETTE_PNG_H;
@@ -188,7 +187,6 @@ const FOLDERS = {
       const y = rect.y + CASSETTE_LABEL_Y * sY;
       const w = CASSETTE_LABEL_W * sX;
       const h = CASSETTE_LABEL_H * sY;
-      // angoli retti: nessun arcTo
       ctx.beginPath();
       ctx.rect(x, y, w, h);
       ctx.closePath();
@@ -785,14 +783,16 @@ export default function App() {
       // 1. Disegna base cassetta
       ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
 
-      // 2. Disegna immagine utente SENZA clip geometrico:
-      //    l'overlay PNG coprirà ingranaggi, nastro e bordi naturalmente
+      // 2. Disegna immagine utente con clip rettangolare sull'area label
       if (coverImg) {
         const { clipRect } = shape;
-        const rectX = folderRect.x + clipRect.x * (folderRect.w / clipRect.vw);
-        const rectY = folderRect.y + clipRect.y * (folderRect.h / clipRect.vh);
-        const rectW = clipRect.w * (folderRect.w / clipRect.vw);
-        const rectH = clipRect.h * (folderRect.h / clipRect.vh);
+        const sX = folderRect.w / clipRect.vw;
+        const sY = folderRect.h / clipRect.vh;
+        const rectX = folderRect.x + clipRect.x * sX;
+        const rectY = folderRect.y + clipRect.y * sY;
+        const rectW = clipRect.w * sX;
+        const rectH = clipRect.h * sY;
+
         const imgRatio = coverImg.width / coverImg.height;
         const canvasRatio = rectW / rectH;
         let drawW, drawH;
@@ -800,7 +800,13 @@ export default function App() {
         else { drawW = rectW * coverScale; drawH = drawW / imgRatio; }
         const drawX = rectX + (rectW - drawW) / 2 + coverOffset.x;
         const drawY = rectY + (rectH - drawH) / 2 + coverOffset.y;
+
         ctx.save();
+        // Clip rettangolare sull'area label — angoli retti, nessun arcTo
+        ctx.beginPath();
+        ctx.rect(rectX, rectY, rectW, rectH);
+        ctx.clip();
+
         ctx.translate(drawX + drawW / 2, drawY + drawH / 2);
         ctx.rotate((coverRotation * Math.PI) / 180);
         ctx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
