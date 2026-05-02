@@ -111,15 +111,15 @@ const FOLDER_COLORS = [
   { id: 'gray', hex: '#8E8E93', name: 'Grigio' },
 ];
 
-// PNG cassette reale: 2185 × 1400
-const CASSETTE_PNG_W = 2185;
-const CASSETTE_PNG_H = 1400;
+// Dimensioni native di cassette-base.png (misurate da Photoshop)
+const CASSETTE_PNG_W = 2183;
+const CASSETTE_PNG_H = 1417;
 
-// Area label in coordinate PNG assolute (misurate in Photoshop con origine default)
-const CASSETTE_LABEL_X = 136;
-const CASSETTE_LABEL_Y = 101;
-const CASSETTE_LABEL_W = 1911;
-const CASSETTE_LABEL_H = 928;
+// Area label misurata direttamente su cassette-base.png
+const CASSETTE_LABEL_X = 135;
+const CASSETTE_LABEL_Y = 103;
+const CASSETTE_LABEL_W = 1909;
+const CASSETTE_LABEL_H = 929;
 
 // Helper: disegna una pillola (rettangolo con rx = h/2) su ctx
 const pillPath = (ctx, x, y, w, h) => {
@@ -472,7 +472,6 @@ export default function App() {
   const [baseImgData, setBaseImgData] = useState(null);
   const [cassetteBaseImg, setCassetteBaseImg] = useState(null);
   const [cassetteOverlayImg, setCassetteOverlayImg] = useState(null);
-  const [cassetteMaskImg, setCassetteMaskImg] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
   const [coverImg, setCoverImg] = useState(null);
   const [label, setLabel] = useState('Archivio 01');
@@ -685,20 +684,17 @@ export default function App() {
     loadSvgAsImage(shape.svg).then(img => setBaseImgData(img)).catch(err => console.error('Folder load error:', err));
   }, [folderShape]);
 
-  // ─── Load cassette PNGs + maschera SVG ──────────────────────────────────────
+  // ─── Load cassette PNGs ──────────────────────────────────────────────────────
   useEffect(() => {
     if (folderShape !== 'cassette') return;
     setCassetteBaseImg(null);
     setCassetteOverlayImg(null);
-    setCassetteMaskImg(null);
     Promise.all([
       loadPngAsImage('/cassette-base.png'),
       loadPngAsImage('/cassette-overlay.png'),
-      loadPngAsImage('/maschera.svg'),
-    ]).then(([base, overlay, mask]) => {
+    ]).then(([base, overlay]) => {
       setCassetteBaseImg(base);
       setCassetteOverlayImg(overlay);
-      setCassetteMaskImg(mask);
     }).catch(err => console.error('Cassette asset load error:', err));
   }, [folderShape]);
 
@@ -795,48 +791,11 @@ export default function App() {
     ctx.clearRect(0, 0, w, h);
 
     if (folderShape === 'cassette') {
-      // 1. Disegna base cassetta
+      // 1. Base cassetta
       ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
 
-      // 2. Pipeline destination-in con maschera SVG
-      if (coverImg && cassetteMaskImg) {
-        // Calcola dimensioni e posizione dell'immagine utente nell'area label
-        const { clipRect } = shape;
-        const sX = folderRect.w / clipRect.vw;
-        const sY = folderRect.h / clipRect.vh;
-        const rectX = folderRect.x + clipRect.x * sX;
-        const rectY = folderRect.y + clipRect.y * sY;
-        const rectW = clipRect.w * sX;
-        const rectH = clipRect.h * sY;
-
-        const imgRatio = coverImg.width / coverImg.height;
-        const canvasRatio = rectW / rectH;
-        let drawW, drawH;
-        if (imgRatio > canvasRatio) { drawH = rectH * coverScale; drawW = drawH * imgRatio; }
-        else { drawW = rectW * coverScale; drawH = drawW / imgRatio; }
-        const drawX = rectX + (rectW - drawW) / 2 + coverOffset.x;
-        const drawY = rectY + (rectH - drawH) / 2 + coverOffset.y;
-
-        // Offscreen: disegna immagine utente, poi ritaglia con maschera (destination-in)
-        const off = document.createElement('canvas');
-        off.width = w; off.height = h;
-        const offCtx = off.getContext('2d');
-
-        offCtx.save();
-        offCtx.translate(drawX + drawW / 2, drawY + drawH / 2);
-        offCtx.rotate((coverRotation * Math.PI) / 180);
-        offCtx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
-        offCtx.drawImage(coverImg, drawX, drawY, drawW, drawH);
-        offCtx.restore();
-
-        // destination-in: mantiene solo i pixel dove la maschera è opaca (zona st1 fill)
-        offCtx.globalCompositeOperation = 'destination-in';
-        offCtx.drawImage(cassetteMaskImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
-
-        // Composite il risultato sul canvas principale (sopra la base)
-        ctx.drawImage(off, 0, 0);
-      } else if (coverImg && !cassetteMaskImg) {
-        // Fallback al clip diretto con pillPath se la maschera non è ancora caricata
+      // 2. Immagine utente ritagliata con pillPath sulle coordinate misurate
+      if (coverImg) {
         const { clipRect } = shape;
         const sX = folderRect.w / clipRect.vw;
         const sY = folderRect.h / clipRect.vh;
@@ -863,7 +822,7 @@ export default function App() {
         ctx.restore();
       }
 
-      // 3. Overlay PNG sopra tutto: copre cornice, ingranaggi, nastro e bordi
+      // 3. Overlay sopra tutto
       if (cassetteOverlayImg) {
         ctx.drawImage(cassetteOverlayImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
@@ -918,7 +877,7 @@ export default function App() {
       else if (labelStyle === 'banner') drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
       else if (labelStyle === 'badge') drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
     }
-  }, [baseImgData, cassetteBaseImg, cassetteOverlayImg, cassetteMaskImg, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, cassetteBaseImg, cassetteOverlayImg, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const getFileName = () => (label.trim() === '' ? 'icon' : label).replace(/\s+/g, '_').toLowerCase();
 
