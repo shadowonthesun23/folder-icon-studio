@@ -6,6 +6,7 @@ const TRANSLATIONS = {
   it: {
     subtitle: 'Crea icone macOS customizzate.',
     section1: '1. Grafica',
+    folderStyle: 'Stile cartella',
     folderColor: 'Colore cartella',
     defaultColor: 'Default',
     changeImage: 'Cambia immagine',
@@ -52,6 +53,7 @@ const TRANSLATIONS = {
   en: {
     subtitle: 'Create custom macOS icons.',
     section1: '1. Artwork',
+    folderStyle: 'Folder style',
     folderColor: 'Folder color',
     defaultColor: 'Default',
     changeImage: 'Change Image',
@@ -169,6 +171,50 @@ const FOLDERS = {
       ctx.bezierCurveTo(oX + 16.5674 * sX, oY + 34.0901 * sY, oX + 13.537 * sX, oY + 37.1205 * sY, oX + 13.537 * sX, oY + 40.8587 * sY);
       ctx.closePath();
     }
+  },
+  cassette: {
+    id: 'cassette',
+    name: 'Cassetta',
+    tintFolder: false,
+    // PNG-based: base e overlay caricati dinamicamente
+    url: null, // placeholder, gestito via cassetteBaseImg / cassetteOverlayImg
+    getFolderRect: (cw, ch) => ({ x: 0, y: 0, w: cw, h: ch }),
+    // Area di clipping: finestra centrale della cassetta
+    // Coordinate su canvas 1024x1024: apertura centrale circa x=180,y=310 w=664,h=340
+    // con due fori reels sottratti (evenodd)
+    buildFlapPath: (ctx, rect) => {
+      const sX = rect.w / 1024;
+      const sY = rect.h / 1024;
+      // Finestra principale
+      const wx = rect.x + 180 * sX;
+      const wy = rect.y + 310 * sY;
+      const ww = 664 * sX;
+      const wh = 340 * sY;
+      const wr = 18 * Math.min(sX, sY);
+      ctx.beginPath();
+      ctx.moveTo(wx + wr, wy);
+      ctx.lineTo(wx + ww - wr, wy);
+      ctx.arcTo(wx + ww, wy, wx + ww, wy + wh, wr);
+      ctx.lineTo(wx + ww, wy + wh - wr);
+      ctx.arcTo(wx + ww, wy + wh, wx, wy + wh, wr);
+      ctx.lineTo(wx + wr, wy + wh);
+      ctx.arcTo(wx, wy + wh, wx, wy, wr);
+      ctx.lineTo(wx, wy + wr);
+      ctx.arcTo(wx, wy, wx + ww, wy, wr);
+      ctx.closePath();
+      // Foro reel sinistro (sottratto con evenodd)
+      const r1x = rect.x + 340 * sX;
+      const r1y = rect.y + 480 * sY;
+      const rr = 90 * Math.min(sX, sY);
+      ctx.moveTo(r1x + rr, r1y);
+      ctx.arc(r1x, r1y, rr, 0, Math.PI * 2, true);
+      // Foro reel destro
+      const r2x = rect.x + 684 * sX;
+      const r2y = rect.y + 480 * sY;
+      ctx.moveTo(r2x + rr, r2y);
+      ctx.arc(r2x, r2y, rr, 0, Math.PI * 2, true);
+    },
+    clipRect: { x: 180, y: 310, w: 664, h: 340, vw: 1024, vh: 1024 },
   }
 };
 
@@ -206,6 +252,13 @@ const loadSvgAsImage = (svgString) => new Promise((resolve, reject) => {
   const img = new Image();
   img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
   img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG load failed')); };
+  img.src = url;
+});
+
+const loadPngAsImage = (url) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => resolve(img);
+  img.onerror = () => reject(new Error(`PNG load failed: ${url}`));
   img.src = url;
 });
 
@@ -431,6 +484,8 @@ export default function App() {
   const fileInputRef = useRef(null);
   const downloadMenuRef = useRef(null);
   const [baseImgData, setBaseImgData] = useState(null);
+  const [cassetteBaseImg, setCassetteBaseImg] = useState(null);
+  const [cassetteOverlayImg, setCassetteOverlayImg] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
   const [coverImg, setCoverImg] = useState(null);
   const [label, setLabel] = useState('Archivio 01');
@@ -443,7 +498,7 @@ export default function App() {
   const [dominantColor, setDominantColor] = useState(null);
   const [folderColorOverride, setFolderColorOverride] = useState(null);
   const [customFolderColor, setCustomFolderColor] = useState('#4B8EF0');
-  const folderShape = 'classic';
+  const [folderShape, setFolderShape] = useState('classic');
   const [coverOffset, setCoverOffset] = useState({ x: 0, y: 0 });
   const [coverScale, setCoverScale] = useState(1);
   const [coverRotation, setCoverRotation] = useState(0);
@@ -633,10 +688,30 @@ export default function App() {
     document.head.appendChild(link);
   }, []);
 
+  // ─── Load folder base image (SVG o PNG cassette) ──────────────────────────
   useEffect(() => {
     const shape = FOLDERS[folderShape];
     setBaseImgData(null);
+    if (folderShape === 'cassette') {
+      // Per la cassetta, le PNG vengono caricate separatamente
+      // baseImgData non viene usato per cassette
+      return;
+    }
     loadSvgAsImage(shape.svg).then(img => setBaseImgData(img)).catch(err => console.error('Folder load error:', err));
+  }, [folderShape]);
+
+  // ─── Load cassette PNGs ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (folderShape !== 'cassette') return;
+    setCassetteBaseImg(null);
+    setCassetteOverlayImg(null);
+    Promise.all([
+      loadPngAsImage('/cassette-base.png'),
+      loadPngAsImage('/cassette-overlay.png'),
+    ]).then(([base, overlay]) => {
+      setCassetteBaseImg(base);
+      setCassetteOverlayImg(overlay);
+    }).catch(err => console.error('Cassette PNG load error:', err));
   }, [folderShape]);
 
   useEffect(() => {
@@ -715,15 +790,60 @@ export default function App() {
     }
   }, [pushHistory]);
 
+  // ─── Main render ──────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !baseImgData) return;
+    if (!canvas) return;
+    // Per cassette aspettiamo entrambe le PNG; per gli altri aspettiamo baseImgData
+    if (folderShape === 'cassette') {
+      if (!cassetteBaseImg) return;
+    } else {
+      if (!baseImgData) return;
+    }
     const ctx = canvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
-    const render = () => {
-      ctx.clearRect(0, 0, w, h);
-      const shape = FOLDERS[folderShape];
-      const folderRect = shape.getFolderRect(w, h);
+    const shape = FOLDERS[folderShape];
+    const folderRect = shape.getFolderRect(w, h);
+
+    ctx.clearRect(0, 0, w, h);
+
+    if (folderShape === 'cassette') {
+      // 1. Disegna base cassetta
+      ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+
+      // 2. Clip con evenodd (finestra - fori reel) e disegna immagine utente
+      if (coverImg) {
+        ctx.save();
+        shape.buildFlapPath(ctx, folderRect);
+        ctx.clip('evenodd');
+
+        const { clipRect } = shape;
+        const rectX = folderRect.x + clipRect.x * (folderRect.w / clipRect.vw);
+        const rectY = folderRect.y + clipRect.y * (folderRect.h / clipRect.vh);
+        const rectW = clipRect.w * (folderRect.w / clipRect.vw);
+        const rectH = clipRect.h * (folderRect.h / clipRect.vh);
+        const imgRatio = coverImg.width / coverImg.height;
+        const canvasRatio = rectW / rectH;
+        let drawW, drawH;
+        if (imgRatio > canvasRatio) { drawH = rectH * coverScale; drawW = drawH * imgRatio; }
+        else { drawW = rectW * coverScale; drawH = drawW / imgRatio; }
+        const drawX = rectX + (rectW - drawW) / 2 + coverOffset.x;
+        const drawY = rectY + (rectH - drawH) / 2 + coverOffset.y;
+        ctx.save();
+        ctx.translate(drawX + drawW / 2, drawY + drawH / 2);
+        ctx.rotate((coverRotation * Math.PI) / 180);
+        ctx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
+        ctx.drawImage(coverImg, drawX, drawY, drawW, drawH);
+        ctx.restore();
+        ctx.restore();
+      }
+
+      // 3. Disegna overlay cassetta sopra tutto (dettagli, fori, viti, ecc.)
+      if (cassetteOverlayImg) {
+        ctx.drawImage(cassetteOverlayImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+      }
+    } else {
+      // Pipeline standard (classic / macos)
       if (shape.tintFolder && effectiveTintColor) {
         const offscreen = document.createElement('canvas');
         offscreen.width = w; offscreen.height = h;
@@ -765,14 +885,15 @@ export default function App() {
         ctx.fillStyle = shadow; ctx.fillRect(rectX, rectY, rectW, rectH);
         ctx.restore();
       }
-      if (label.trim() !== '') {
-        if (labelStyle === 'dymo') drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
-        else if (labelStyle === 'banner') drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
-        else if (labelStyle === 'badge') drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
-      }
-    };
-    render();
-  }, [baseImgData, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+    }
+
+    // Etichette (comuni a tutti gli stili)
+    if (label.trim() !== '') {
+      if (labelStyle === 'dymo') drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
+      else if (labelStyle === 'banner') drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
+      else if (labelStyle === 'badge') drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
+    }
+  }, [baseImgData, cassetteBaseImg, cassetteOverlayImg, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const getFileName = () => (label.trim() === '' ? 'icon' : label).replace(/\s+/g, '_').toLowerCase();
 
@@ -855,6 +976,23 @@ export default function App() {
                 <LucideImage size={16} /> {t.section1}
               </h2>
 
+              {/* ── Folder style selector ── */}
+              <div className="space-y-2">
+                <label className="text-xs text-neutral-500">{t.folderStyle}</label>
+                <div className="flex gap-2">
+                  {Object.values(FOLDERS).map(f => (
+                    <button key={f.id} onClick={() => setFolderShape(f.id)}
+                      className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
+                        folderShape === f.id
+                          ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                          : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                      }`}>
+                      {f.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="relative">
                 <label
                   className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all border border-dashed rounded-xl cursor-pointer group overflow-hidden relative"
@@ -902,35 +1040,38 @@ export default function App() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <label className="text-xs text-neutral-500 flex items-center gap-1"><Palette size={13} /> {t.folderColor}</label>
-                <div className="flex flex-wrap gap-2 items-center">
-                  <button onClick={() => setFolderColorOverrideWithHistory(null)} title={t.defaultColor}
-                    className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-                      folderColorOverride === null ? 'border-blue-500 scale-110 bg-[#4B8EF0] text-white' : 'border-neutral-600 bg-gradient-to-br from-[#6aadff] to-[#2171e8] hover:scale-105'
-                    }`}>
-                    {folderColorOverride === null && <Check size={11} />}
-                  </button>
-                  {FOLDER_COLORS.slice(1).map(color => (
-                    <button key={color.id} onClick={() => setFolderColorOverrideWithHistory(color.hex)} title={color.name}
+              {/* Colore cartella — solo per stili che lo supportano */}
+              {FOLDERS[folderShape].tintFolder && (
+                <div className="space-y-2">
+                  <label className="text-xs text-neutral-500 flex items-center gap-1"><Palette size={13} /> {t.folderColor}</label>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <button onClick={() => setFolderColorOverrideWithHistory(null)} title={t.defaultColor}
                       className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-                        folderColorOverride === color.hex && !isCustomFolderColor ? 'border-white scale-110' : 'border-transparent hover:scale-105'
-                      }`} style={{ backgroundColor: color.hex }}>
-                      {folderColorOverride === color.hex && !isCustomFolderColor && <Check size={11} style={{ color: getTapeTextColor(color.hex) }} />}
+                        folderColorOverride === null ? 'border-blue-500 scale-110 bg-[#4B8EF0] text-white' : 'border-neutral-600 bg-gradient-to-br from-[#6aadff] to-[#2171e8] hover:scale-105'
+                      }`}>
+                      {folderColorOverride === null && <Check size={11} />}
                     </button>
-                  ))}
-                  <button onClick={() => folderColorInputRef.current?.click()} title={t.customColor}
-                    className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
-                      isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
-                    }`} style={isCustomFolderColor ? { backgroundColor: folderColorOverride } : {}}>
-                    {isCustomFolderColor ? <Check size={11} style={{ color: '#fff', mixBlendMode: 'difference' }} /> : <Palette size={11} className="text-neutral-400" />}
-                  </button>
-                  <input ref={folderColorInputRef} type="color"
-                    value={isCustomFolderColor ? folderColorOverride : customFolderColor}
-                    onChange={e => { setCustomFolderColor(e.target.value); setFolderColorOverrideWithHistory(e.target.value); }}
-                    className="sr-only" />
+                    {FOLDER_COLORS.slice(1).map(color => (
+                      <button key={color.id} onClick={() => setFolderColorOverrideWithHistory(color.hex)} title={color.name}
+                        className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                          folderColorOverride === color.hex && !isCustomFolderColor ? 'border-white scale-110' : 'border-transparent hover:scale-105'
+                        }`} style={{ backgroundColor: color.hex }}>
+                        {folderColorOverride === color.hex && !isCustomFolderColor && <Check size={11} style={{ color: getTapeTextColor(color.hex) }} />}
+                      </button>
+                    ))}
+                    <button onClick={() => folderColorInputRef.current?.click()} title={t.customColor}
+                      className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
+                        isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
+                      }`} style={isCustomFolderColor ? { backgroundColor: folderColorOverride } : {}}>
+                      {isCustomFolderColor ? <Check size={11} style={{ color: '#fff', mixBlendMode: 'difference' }} /> : <Palette size={11} className="text-neutral-400" />}
+                    </button>
+                    <input ref={folderColorInputRef} type="color"
+                      value={isCustomFolderColor ? folderColorOverride : customFolderColor}
+                      onChange={e => { setCustomFolderColor(e.target.value); setFolderColorOverrideWithHistory(e.target.value); }}
+                      className="sr-only" />
+                  </div>
                 </div>
-              </div>
+              )}
             </section>
 
             <hr className="border-white/5" />
