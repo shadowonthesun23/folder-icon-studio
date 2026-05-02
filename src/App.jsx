@@ -306,15 +306,16 @@ export default function App() {
   const [coverScale, setCoverScale] = useState(1);
   const [coverRotation, setCoverRotation] = useState(0);
   const [tapeOffset, setTapeOffset] = useState({ x: 0, y: 0 });
-  // dragging gestito come ref per evitare re-render durante pointermove
   const draggingRef = useRef(null);
   const dragStartPosRef = useRef({ x: 0, y: 0 });
+  // ref per i due input color custom
+  const folderColorInputRef = useRef(null);
+  const tapeColorInputRef = useRef(null);
   const [lang, setLang] = useState(() => {
     try { return localStorage.getItem('fis_lang') || 'it'; } catch { return 'it'; }
   });
 
   const t = TRANSLATIONS[lang];
-
   const effectiveTintColor = folderColorOverride ?? dominantColor ?? null;
 
   const switchLang = (l) => {
@@ -330,23 +331,15 @@ export default function App() {
     setDominantColor(null);
   };
 
-  // Aggiorna il cursore del canvas in modo imperativo, senza toccare il DOM React
   const updateCursor = (isDragging) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (isDragging) {
-      canvas.style.cursor = 'grabbing';
-    } else if (coverSrc) {
-      canvas.style.cursor = 'grab';
-    } else {
-      canvas.style.cursor = 'default';
-    }
+    if (isDragging) canvas.style.cursor = 'grabbing';
+    else if (coverSrc) canvas.style.cursor = 'grab';
+    else canvas.style.cursor = 'default';
   };
 
-  // Sincronizza il cursore quando cambia coverSrc (senza drag attivo)
-  useEffect(() => {
-    updateCursor(false);
-  }, [coverSrc]);
+  useEffect(() => { updateCursor(false); }, [coverSrc]);
 
   useEffect(() => {
     const link = document.createElement('link');
@@ -364,10 +357,7 @@ export default function App() {
   }, [folderShape]);
 
   useEffect(() => {
-    if (!coverSrc) {
-      coverImgRef.current = null;
-      return;
-    }
+    if (!coverSrc) { coverImgRef.current = null; return; }
     const img = new Image();
     img.onload = () => { coverImgRef.current = img; };
     img.src = coverSrc;
@@ -542,9 +532,7 @@ export default function App() {
                 key={l}
                 onClick={() => switchLang(l)}
                 className={`px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide transition-all ${
-                  lang === l
-                    ? 'bg-neutral-700 text-white'
-                    : 'text-neutral-500 hover:text-neutral-300'
+                  lang === l ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'
                 }`}
               >
                 {l.toUpperCase()}
@@ -607,6 +595,7 @@ export default function App() {
               </div>
             )}
 
+            {/* Colore cartella */}
             <div className="space-y-2">
               <label className="text-xs text-neutral-500 flex items-center gap-1">
                 <Palette size={13} /> {t.folderColor}
@@ -640,27 +629,30 @@ export default function App() {
                     )}
                   </button>
                 ))}
-                <label
-                  className={`w-7 h-7 rounded-full border-2 cursor-pointer flex items-center justify-center overflow-hidden transition-all hover:scale-105 ${
+                {/* Custom color picker per cartella — bottone separato dall'input */}
+                <button
+                  onClick={() => folderColorInputRef.current?.click()}
+                  title={t.customColor}
+                  className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
                     isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
                   }`}
                   style={isCustomFolderColor ? { backgroundColor: folderColorOverride } : {}}
-                  title={t.customColor}
                 >
-                  <input
-                    type="color"
-                    value={isCustomFolderColor ? folderColorOverride : customFolderColor}
-                    onChange={e => {
-                      setCustomFolderColor(e.target.value);
-                      setFolderColorOverride(e.target.value);
-                    }}
-                    className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer"
-                  />
                   {isCustomFolderColor
-                    ? <Check size={11} style={{ color: '#fff', mixBlendMode: 'difference' }} className="pointer-events-none" />
-                    : <Palette size={11} className="text-neutral-400 pointer-events-none" />
+                    ? <Check size={11} style={{ color: '#fff', mixBlendMode: 'difference' }} />
+                    : <Palette size={11} className="text-neutral-400" />
                   }
-                </label>
+                </button>
+                <input
+                  ref={folderColorInputRef}
+                  type="color"
+                  value={isCustomFolderColor ? folderColorOverride : customFolderColor}
+                  onChange={e => {
+                    setCustomFolderColor(e.target.value);
+                    setFolderColorOverride(e.target.value);
+                  }}
+                  className="sr-only"
+                />
               </div>
             </div>
           </section>
@@ -754,6 +746,7 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Colore nastro/banner */}
                 <div className="space-y-2 pt-2">
                   <label className="text-xs text-neutral-500 flex items-center gap-1">
                     <Palette size={14} /> {labelStyle === 'banner' ? t.colorBanner : t.colorTape}
@@ -767,17 +760,27 @@ export default function App() {
                         {tapeColor === color.hex && <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />}
                       </button>
                     ))}
-                    <label
-                      className={`relative w-8 h-8 rounded-full border-2 cursor-pointer flex items-center justify-center overflow-hidden transition-all hover:scale-105 ${
+                    {/* Custom color picker per nastro — bottone separato dall'input */}
+                    <button
+                      onClick={() => tapeColorInputRef.current?.click()}
+                      title={t.customColor}
+                      className={`relative w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
                         !isPresetColor ? 'border-blue-500 scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
                       }`}
                       style={!isPresetColor ? { backgroundColor: tapeColor } : {}}
-                      title={t.customColor}
                     >
-                      <input type="color" value={tapeColor} onChange={e => setTapeColor(e.target.value)} className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer" />
-                      {isPresetColor && <Palette size={12} className="text-neutral-400 pointer-events-none" />}
-                      {!isPresetColor && <Check size={14} className="pointer-events-none" style={{ color: '#fff', mixBlendMode: 'difference' }} />}
-                    </label>
+                      {isPresetColor
+                        ? <Palette size={12} className="text-neutral-400" />
+                        : <Check size={14} style={{ color: '#fff', mixBlendMode: 'difference' }} />
+                      }
+                    </button>
+                    <input
+                      ref={tapeColorInputRef}
+                      type="color"
+                      value={tapeColor}
+                      onChange={e => setTapeColor(e.target.value)}
+                      className="sr-only"
+                    />
                   </div>
                 </div>
 
@@ -856,7 +859,6 @@ export default function App() {
               <Move size={12} /> {t.dragCanvasHint}
             </div>
           )}
-          {/* className statico: nessuna dipendenza da state che cambia durante il drag */}
           <canvas
             ref={canvasRef}
             width={1024}
