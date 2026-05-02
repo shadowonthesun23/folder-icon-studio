@@ -486,7 +486,11 @@ export default function App() {
   });
 
   const t = TRANSLATIONS[lang];
-  const effectiveTintColor = folderColorOverride ?? dominantColor ?? null;
+
+  // Per classic: usa dominantColor come fallback. Per cassette: solo folderColorOverride esplicito.
+  const effectiveTintColor = folderShape === 'cassette'
+    ? folderColorOverride
+    : (folderColorOverride ?? dominantColor ?? null);
 
   useEffect(() => {
     stateRef.current = {
@@ -496,7 +500,7 @@ export default function App() {
     };
   });
 
-  // ─── Mod 1 & 2: when switching to cassette, clear label and force non-banner style
+  // Quando si passa a cassette: reset label e forza stile non-banner
   useEffect(() => {
     if (folderShape === 'cassette') {
       setLabel('');
@@ -742,15 +746,19 @@ export default function App() {
     ctx.clearRect(0, 0, w, h);
 
     if (folderShape === 'cassette') {
-      // ─── Mod 3: color tint on cassette-base using offscreen ───────────────
+      // Tint cassette-base con multiply: rispetta i neri (fori restano scuri)
+      // effectiveTintColor per cassette è solo folderColorOverride esplicito
       if (effectiveTintColor) {
         const offCassette = document.createElement('canvas');
         offCassette.width = w; offCassette.height = h;
         const offCtx = offCassette.getContext('2d');
+        // 1. disegna base
         offCtx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
-        offCtx.globalCompositeOperation = 'color';
+        // 2. sovrapponi colore con multiply: nero*qualsiasi = nero, bianco*colore = colore
+        offCtx.globalCompositeOperation = 'multiply';
         offCtx.fillStyle = effectiveTintColor;
         offCtx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        // 3. ritaglia ai pixel opachi della base (preserva trasparenza)
         offCtx.globalCompositeOperation = 'destination-in';
         offCtx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
         ctx.drawImage(offCassette, 0, 0);
@@ -758,7 +766,7 @@ export default function App() {
         ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
 
-      // Immagine utente mascherata su canvas offscreen
+      // Immagine utente mascherata
       if (coverImg) {
         const sX = folderRect.w / CASSETTE_PNG_W;
         const sY = folderRect.h / CASSETTE_PNG_H;
@@ -796,13 +804,13 @@ export default function App() {
         ctx.drawImage(off, rectX, rectY);
       }
 
-      // Overlay sopra tutto
+      // Overlay
       if (cassetteOverlayImg) {
         ctx.drawImage(cassetteOverlayImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
 
     } else {
-      // Pipeline standard (classic)
+      // Pipeline classic
       if (shape.tintFolder && effectiveTintColor) {
         const offscreen = document.createElement('canvas');
         offscreen.width = w; offscreen.height = h;
@@ -989,7 +997,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Colore cartella/cassetta — visibile se tintFolder === true */}
               {FOLDERS[folderShape].tintFolder && (
                 <div className="space-y-2">
                   <label className="text-xs text-neutral-500 flex items-center gap-1">
