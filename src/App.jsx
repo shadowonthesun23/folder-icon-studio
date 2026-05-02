@@ -140,52 +140,15 @@ const FOLDERS = {
       ctx.closePath();
     }
   },
-  macos: {
-    id: 'macos',
-    name: 'macOS',
-    tintFolder: false,
-    svg: "<svg xmlns='http://www.w3.org/2000/svg' width='241' height='180' viewBox='0 0 241 180' fill='none'><g filter='url(#f0)'><path d='M226.745 23.9374V142.139C226.745 145.877 223.715 148.907 219.977 148.907H20.3055C16.5674 148.907 13.537 145.877 13.537 142.139V6.76851C13.537 3.03036 16.5674 0 20.3055 0H85.1799C89.1801 0 93.0508 1.4171 96.1054 3.99982L109.788 15.569C111.01 16.6021 112.558 17.1689 114.158 17.1689H219.977C223.715 17.1689 226.745 20.1993 226.745 23.9374Z' fill='url(#g0)'/></g><g filter='url(#f1)'><path d='M13.537 40.8587V159.06C13.537 162.798 16.5674 165.828 20.3055 165.828H219.977C223.715 165.828 226.745 162.798 226.745 159.06V30.4583C226.745 26.7201 223.715 23.6898 219.977 23.6898H118.211C113.919 23.6898 109.688 24.7101 105.868 26.6667L97.187 31.1132C93.367 33.0698 89.1366 34.0901 84.8447 34.0901H20.3055C16.5674 34.0901 13.537 37.1205 13.537 40.8587Z' fill='url(#g1)'/></g><defs><filter id='f0' x='13' y='-4' width='215' height='156' filterUnits='userSpaceOnUse' color-interpolation-filters='sRGB'><feFlood flood-opacity='0' result='bg'/><feBlend in='SourceGraphic' in2='bg' result='shape'/><feColorMatrix in='SourceAlpha' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='alpha'/><feOffset dy='1.7'/><feGaussianBlur stdDeviation='1.7'/><feComposite in2='alpha'/><feColorMatrix values='0 0 0 0 0.94 0 0 0 0 0.84 0 0 0 0 0.3 0 0 0 1 0'/><feBlend in='SourceGraphic' in2='shape' result='s1'/><feColorMatrix in='SourceAlpha' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='alpha2'/><feOffset dy='-3.4'/><feGaussianBlur stdDeviation='1.7'/><feComposite in2='alpha2'/><feColorMatrix values='0 0 0 0 0.81 0 0 0 0 0.52 0 0 0 0 0.2 0 0 0 1 0'/><feBlend in2='s1'/></filter><filter id='f1' x='0' y='10' width='241' height='170' filterUnits='userSpaceOnUse' color-interpolation-filters='sRGB'><feFlood flood-opacity='0' result='bg'/><feColorMatrix in='SourceAlpha' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='alpha'/><feOffset/><feGaussianBlur stdDeviation='6.8'/><feComposite in2='alpha'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.1 0'/><feBlend in2='bg' result='shadow'/><feBlend in='SourceGraphic' in2='shadow' result='shape'/><feColorMatrix in='SourceAlpha' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='alpha3'/><feOffset dy='1.7'/><feGaussianBlur stdDeviation='3.4'/><feComposite in2='alpha3'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 0.975 0 0 0 0 0.733 0 0 0 1 0'/><feBlend in2='shape' result='s2'/><feColorMatrix in='SourceAlpha' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0' result='alpha4'/><feOffset dy='-3.4'/><feGaussianBlur stdDeviation='1.7'/><feComposite in2='alpha4'/><feColorMatrix values='0 0 0 0 0.81 0 0 0 0 0.52 0 0 0 0 0.2 0 0 0 1 0'/><feBlend in2='s2'/></filter><linearGradient id='g0' x1='82.9' y1='6.8' x2='84.6' y2='37.2' gradientUnits='userSpaceOnUse'><stop offset='0.04' stop-color='#E1AE40'/><stop offset='1' stop-color='#ECAB3F'/></linearGradient><linearGradient id='g1' x1='120' y1='23.7' x2='120' y2='165.8' gradientUnits='userSpaceOnUse'><stop stop-color='#F8D555'/><stop offset='1' stop-color='#E0A53F'/></linearGradient></defs></svg>",
-    getFolderRect: (cw, ch) => {
-      const fh = Math.round(cw * 180 / 241);
-      return { x: 0, y: Math.round((ch - fh) / 2), w: cw, h: fh };
-    },
-    clipRect: { x: 13.537, y: 23.6898, w: 213.208, h: 142.138, vw: 241, vh: 180 },
-    buildFlapPath: (ctx, rect) => {
-      const sX = rect.w / 241;
-      const sY = rect.h / 180;
-      const oX = rect.x;
-      const oY = rect.y;
-      ctx.beginPath();
-      ctx.moveTo(oX + 13.537 * sX, oY + 40.8587 * sY);
-      ctx.lineTo(oX + 13.537 * sX, oY + 159.06 * sY);
-      ctx.bezierCurveTo(oX + 13.537 * sX, oY + 162.798 * sY, oX + 16.5674 * sX, oY + 165.828 * sY, oX + 20.3055 * sX, oY + 165.828 * sY);
-      ctx.lineTo(oX + 219.977 * sX, oY + 165.828 * sY);
-      ctx.bezierCurveTo(oX + 223.715 * sX, oY + 165.828 * sY, oX + 226.745 * sX, oY + 162.798 * sY, oX + 226.745 * sX, oY + 159.06 * sY);
-      ctx.lineTo(oX + 226.745 * sX, oY + 30.4583 * sY);
-      ctx.bezierCurveTo(oX + 226.745 * sX, oY + 26.7201 * sY, oX + 223.715 * sX, oY + 23.6898 * sY, oX + 219.977 * sX, oY + 23.6898 * sY);
-      ctx.lineTo(oX + 118.211 * sX, oY + 23.6898 * sY);
-      ctx.bezierCurveTo(oX + 113.919 * sX, oY + 23.6898 * sY, oX + 109.688 * sX, oY + 24.7101 * sY, oX + 105.868 * sX, oY + 26.6667 * sY);
-      ctx.lineTo(oX + 97.187 * sX, oY + 31.1132 * sY);
-      ctx.bezierCurveTo(oX + 93.367 * sX, oY + 33.0698 * sY, oX + 89.1366 * sX, oY + 34.0901 * sY, oX + 84.8447 * sX, oY + 34.0901 * sY);
-      ctx.lineTo(oX + 20.3055 * sX, oY + 34.0901 * sY);
-      ctx.bezierCurveTo(oX + 16.5674 * sX, oY + 34.0901 * sY, oX + 13.537 * sX, oY + 37.1205 * sY, oX + 13.537 * sX, oY + 40.8587 * sY);
-      ctx.closePath();
-    }
-  },
   cassette: {
     id: 'cassette',
     name: 'Cassetta',
     tintFolder: false,
-    // PNG-based: base e overlay caricati dinamicamente
-    url: null, // placeholder, gestito via cassetteBaseImg / cassetteOverlayImg
+    url: null,
     getFolderRect: (cw, ch) => ({ x: 0, y: 0, w: cw, h: ch }),
-    // Area di clipping: finestra centrale della cassetta
-    // Coordinate su canvas 1024x1024: apertura centrale circa x=180,y=310 w=664,h=340
-    // con due fori reels sottratti (evenodd)
     buildFlapPath: (ctx, rect) => {
       const sX = rect.w / 1024;
       const sY = rect.h / 1024;
-      // Finestra principale
       const wx = rect.x + 180 * sX;
       const wy = rect.y + 310 * sY;
       const ww = 664 * sX;
@@ -202,13 +165,11 @@ const FOLDERS = {
       ctx.lineTo(wx, wy + wr);
       ctx.arcTo(wx, wy, wx + ww, wy, wr);
       ctx.closePath();
-      // Foro reel sinistro (sottratto con evenodd)
       const r1x = rect.x + 340 * sX;
       const r1y = rect.y + 480 * sY;
       const rr = 90 * Math.min(sX, sY);
       ctx.moveTo(r1x + rr, r1y);
       ctx.arc(r1x, r1y, rr, 0, Math.PI * 2, true);
-      // Foro reel destro
       const r2x = rect.x + 684 * sX;
       const r2y = rect.y + 480 * sY;
       ctx.moveTo(r2x + rr, r2y);
@@ -465,7 +426,6 @@ const savePresetsToStorage = (presets) => {
 
 const makeSnapshot = (s) => ({ ...s });
 
-// Generate a 48x48 thumbnail dataURL from the current canvas
 const captureThumbnail = (canvas) => {
   if (!canvas) return null;
   try {
@@ -693,8 +653,6 @@ export default function App() {
     const shape = FOLDERS[folderShape];
     setBaseImgData(null);
     if (folderShape === 'cassette') {
-      // Per la cassetta, le PNG vengono caricate separatamente
-      // baseImgData non viene usato per cassette
       return;
     }
     loadSvgAsImage(shape.svg).then(img => setBaseImgData(img)).catch(err => console.error('Folder load error:', err));
@@ -794,7 +752,6 @@ export default function App() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    // Per cassette aspettiamo entrambe le PNG; per gli altri aspettiamo baseImgData
     if (folderShape === 'cassette') {
       if (!cassetteBaseImg) return;
     } else {
@@ -808,10 +765,8 @@ export default function App() {
     ctx.clearRect(0, 0, w, h);
 
     if (folderShape === 'cassette') {
-      // 1. Disegna base cassetta
       ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
 
-      // 2. Clip con evenodd (finestra - fori reel) e disegna immagine utente
       if (coverImg) {
         ctx.save();
         shape.buildFlapPath(ctx, folderRect);
@@ -838,12 +793,11 @@ export default function App() {
         ctx.restore();
       }
 
-      // 3. Disegna overlay cassetta sopra tutto (dettagli, fori, viti, ecc.)
       if (cassetteOverlayImg) {
         ctx.drawImage(cassetteOverlayImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
     } else {
-      // Pipeline standard (classic / macos)
+      // Pipeline standard (classic)
       if (shape.tintFolder && effectiveTintColor) {
         const offscreen = document.createElement('canvas');
         offscreen.width = w; offscreen.height = h;
@@ -1252,7 +1206,6 @@ export default function App() {
 
               {presetsOpen && (
                 <div className="space-y-3">
-                  {/* Save row */}
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -1271,7 +1224,6 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Preset list */}
                   {presets.length === 0 ? (
                     <p className="text-xs text-neutral-600 text-center py-3">{t.noPresets}</p>
                   ) : (
@@ -1279,7 +1231,6 @@ export default function App() {
                       {presets.map(preset => (
                         <div key={preset.id}
                           className="flex items-center gap-2.5 bg-[#09090b] border border-neutral-800/60 rounded-xl px-3 py-2 group hover:border-neutral-700/60 transition-colors">
-                          {/* Thumbnail */}
                           {preset.thumbnail ? (
                             <img
                               src={preset.thumbnail}
@@ -1294,12 +1245,10 @@ export default function App() {
                               <Bookmark size={14} className="text-white/60" />
                             </div>
                           )}
-                          {/* Name + style pill */}
                           <div className="flex-1 min-w-0">
                             <span className="block text-xs text-neutral-200 font-mono truncate">{preset.name}</span>
                             <span className="text-[10px] text-neutral-600">{preset.labelStyle}</span>
                           </div>
-                          {/* Actions */}
                           <button
                             onClick={() => handleApplyPreset(preset)}
                             className="text-[11px] text-blue-400 hover:text-blue-300 font-medium transition-colors shrink-0 px-1">
