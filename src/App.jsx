@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown } from 'lucide-react';
+import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown, Circle } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
 const TRANSLATIONS = {
@@ -14,24 +14,27 @@ const TRANSLATIONS = {
     zoom: 'Zoom',
     rotation: 'Rotazione',
     section2: '2. Etichetta',
-    styleDymo: '\uD83C\uDFF7\uFE0F Dymo',
-    styleBanner: '\u25AC Fascia',
+    styleDymo: '🏷️ Dymo',
+    styleBanner: '▬ Fascia',
+    styleBadge: '● Badge',
     labelText: 'Testo (lascia vuoto per nascondere)',
     labelPlaceholder: 'Es. Progetto X',
     font: 'Font',
     fontSize: 'Dimensione',
+    badgeSize: 'Dimensione badge',
     tapeAngle: 'Inclinazione nastro',
     resetTip: 'Ripristina',
     resetBtn: 'reset',
-    dragHint: "Trascina l\u2019etichetta in anteprima per riposizionarla",
+    dragHint: "Trascina l'etichetta in anteprima per riposizionarla",
     colorTape: 'Colore Nastro',
     colorBanner: 'Colore Fascia',
-    opacity: 'Opacit\u00e0',
+    colorBadge: 'Colore Badge',
+    opacity: 'Opacità',
     download: 'Scarica',
-    downloadPng: 'PNG 1024\u00d71024',
+    downloadPng: 'PNG 1024×1024',
     downloadIcns: 'ICNS (macOS)',
     downloadIco: 'ICO (Windows)',
-    uploadHint: "Carica un\u2019immagine per iniziare",
+    uploadHint: "Carica un'immagine per iniziare",
     dragCanvasHint: 'Clicca e trascina per posizionare',
     customColor: 'Colore personalizzato',
     coverRotation: 'Rotazione',
@@ -48,21 +51,24 @@ const TRANSLATIONS = {
     zoom: 'Zoom',
     rotation: 'Rotation',
     section2: '2. Label',
-    styleDymo: '\uD83C\uDFF7\uFE0F Dymo',
-    styleBanner: '\u25AC Banner',
+    styleDymo: '🏷️ Dymo',
+    styleBanner: '▬ Banner',
+    styleBadge: '● Badge',
     labelText: 'Text (leave empty to hide)',
     labelPlaceholder: 'e.g. Project X',
     font: 'Font',
     fontSize: 'Size',
+    badgeSize: 'Badge size',
     tapeAngle: 'Tape angle',
     resetTip: 'Reset',
     resetBtn: 'reset',
     dragHint: 'Drag the label on the preview to reposition it',
     colorTape: 'Tape Color',
     colorBanner: 'Banner Color',
+    colorBadge: 'Badge Color',
     opacity: 'Opacity',
     download: 'Download',
-    downloadPng: 'PNG 1024\u00d71024',
+    downloadPng: 'PNG 1024×1024',
     downloadIcns: 'ICNS (macOS)',
     downloadIco: 'ICO (Windows)',
     uploadHint: 'Upload an image to get started',
@@ -378,6 +384,77 @@ const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontSizeMult
   ctx.restore();
 };
 
+const drawBadge = (ctx, w, h, text, badgeHex, opacity, badgeOffsetX, badgeOffsetY, radius, fontSizeMultiplier, fontFamily) => {
+  const cx = w / 2 + badgeOffsetX;
+  const cy = h * 0.72 + badgeOffsetY;
+
+  ctx.save();
+
+  // Ombra direzionale — luce dall'alto-sinistra
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 6;
+
+  ctx.globalAlpha = opacity;
+  ctx.fillStyle = badgeHex;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Reset shadow prima del testo per non duplicarlo
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.globalAlpha = 1;
+
+  // Highlight interno — sottile arco chiaro in alto per simulare convessità
+  const highlight = ctx.createRadialGradient(cx - radius * 0.2, cy - radius * 0.3, radius * 0.1, cx, cy, radius);
+  highlight.addColorStop(0, 'rgba(255,255,255,0.18)');
+  highlight.addColorStop(0.5, 'rgba(255,255,255,0.04)');
+  highlight.addColorStop(1, 'rgba(0,0,0,0.0)');
+  ctx.globalAlpha = opacity;
+  ctx.fillStyle = highlight;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Testo — split automatico su 2 righe
+  const textColor = getTapeTextColor(badgeHex);
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const words = text.trim().split(' ');
+  let lines = [text];
+  let baseFontSize = radius * 0.38 * fontSizeMultiplier;
+  const maxWidth = radius * 1.5;
+
+  ctx.font = `bold ${baseFontSize}px "${fontFamily}", sans-serif`;
+  if (words.length > 1 && ctx.measureText(text).width > maxWidth) {
+    const mid = Math.ceil(words.length / 2);
+    lines = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+  }
+
+  lines.forEach((line, i) => {
+    let fs = baseFontSize;
+    ctx.font = `bold ${fs}px "${fontFamily}", sans-serif`;
+    while (ctx.measureText(line).width > maxWidth && fs > 8) {
+      fs -= 2;
+      ctx.font = `bold ${fs}px "${fontFamily}", sans-serif`;
+    }
+    const lineH = fs * 1.2;
+    const totalH = lineH * lines.length;
+    const lineY = cy - totalH / 2 + lineH * i + lineH / 2;
+    ctx.fillText(line, cx, lineY);
+  });
+
+  ctx.restore();
+};
+
 const IconX = ({ size = 16, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M4 4l11.733 16h4.267L8.267 4z" />
@@ -415,6 +492,8 @@ export default function App() {
   const [coverScale, setCoverScale] = useState(1);
   const [coverRotation, setCoverRotation] = useState(0);
   const [tapeOffset, setTapeOffset] = useState({ x: 0, y: 0 });
+  const [badgeOffset, setBadgeOffset] = useState({ x: 0, y: 0 });
+  const [badgeSize, setBadgeSize] = useState(160);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const draggingRef = useRef(null);
@@ -520,6 +599,7 @@ export default function App() {
     const scaleY = canvas.height / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
+
     if (labelStyle === 'dymo') {
       const tapeW = canvas.width * 0.55;
       const tapeH = canvas.height * 0.12;
@@ -530,9 +610,19 @@ export default function App() {
       } else if (coverSrc) {
         draggingRef.current = 'cover';
       }
+    } else if (labelStyle === 'badge') {
+      const bcx = canvas.width / 2 + badgeOffset.x;
+      const bcy = canvas.height * 0.72 + badgeOffset.y;
+      const dist = Math.sqrt((x - bcx) ** 2 + (y - bcy) ** 2);
+      if (label.trim() !== '' && dist <= badgeSize) {
+        draggingRef.current = 'badge';
+      } else if (coverSrc) {
+        draggingRef.current = 'cover';
+      }
     } else if (coverSrc) {
       draggingRef.current = 'cover';
     }
+
     if (draggingRef.current) updateCursor(true);
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
     if (e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId);
@@ -547,6 +637,7 @@ export default function App() {
     const dx = (e.clientX - dragStartPosRef.current.x) * scaleX;
     const dy = (e.clientY - dragStartPosRef.current.y) * scaleY;
     if (draggingRef.current === 'tape') setTapeOffset(p => ({ x: p.x + dx, y: p.y + dy }));
+    else if (draggingRef.current === 'badge') setBadgeOffset(p => ({ x: p.x + dx, y: p.y + dy }));
     else if (draggingRef.current === 'cover') setCoverOffset(p => ({ x: p.x + dx, y: p.y + dy }));
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
   };
@@ -615,13 +706,15 @@ export default function App() {
       if (label.trim() !== '') {
         if (labelStyle === 'dymo') {
           drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
-        } else {
+        } else if (labelStyle === 'banner') {
           drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
+        } else if (labelStyle === 'badge') {
+          drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
         }
       }
     };
     render();
-  }, [baseImgData, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const getFileName = () => (label.trim() === '' ? 'icon' : label).replace(/\s+/g, '_').toLowerCase();
 
@@ -765,7 +858,7 @@ export default function App() {
                   <div>
                     <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
                       <span className="flex items-center gap-1"><RotateCw size={14} /> {t.coverRotation}</span>
-                      <span>{coverRotation}\u00b0</span>
+                      <span>{coverRotation}°</span>
                     </div>
                     <input type="range" min="-180" max="180" step="1" value={coverRotation} onChange={e => setCoverRotation(parseInt(e.target.value))}
                       className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
@@ -853,6 +946,12 @@ export default function App() {
                   }`}>
                   {t.styleBanner}
                 </button>
+                <button onClick={() => setLabelStyle('badge')}
+                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
+                    labelStyle === 'badge' ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                  }`}>
+                  {t.styleBadge}
+                </button>
               </div>
 
               <div className="space-y-2">
@@ -895,7 +994,7 @@ export default function App() {
                       <div className="flex justify-between items-center text-xs text-neutral-400">
                         <span className="flex items-center gap-1"><RotateCw size={13} /> {t.tapeAngle}</span>
                         <div className="flex items-center gap-1">
-                          <span>{tapeRotation.toFixed(1)}\u00b0</span>
+                          <span>{tapeRotation.toFixed(1)}°</span>
                           {tapeRotation !== -2.3 && (
                             <button onClick={() => setTapeRotation(-2.3)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
                               <RotateCcw size={10} />
@@ -908,13 +1007,33 @@ export default function App() {
                     </div>
                   )}
 
-                  {labelStyle === 'dymo' && (
+                  {labelStyle === 'badge' && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs text-neutral-400">
+                        <span className="flex items-center gap-1"><Circle size={13} /> {t.badgeSize}</span>
+                        <div className="flex items-center gap-1">
+                          <span>{badgeSize}px</span>
+                          {badgeSize !== 160 && (
+                            <button onClick={() => setBadgeSize(160)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
+                              <RotateCcw size={10} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <input type="range" min="60" max="220" step="5" value={badgeSize} onChange={e => setBadgeSize(parseInt(e.target.value))}
+                        className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                    </div>
+                  )}
+
+                  {(labelStyle === 'dymo' || labelStyle === 'badge') && (
                     <div className="flex items-center justify-between">
                       <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
                         <Move size={11} className="shrink-0" /> {t.dragHint}
                       </p>
-                      {(tapeOffset.x !== 0 || tapeOffset.y !== 0) && (
-                        <button onClick={() => setTapeOffset({ x: 0, y: 0 })}
+                      {((labelStyle === 'dymo' && (tapeOffset.x !== 0 || tapeOffset.y !== 0)) ||
+                        (labelStyle === 'badge' && (badgeOffset.x !== 0 || badgeOffset.y !== 0))) && (
+                        <button
+                          onClick={() => labelStyle === 'dymo' ? setTapeOffset({ x: 0, y: 0 }) : setBadgeOffset({ x: 0, y: 0 })}
                           className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0">
                           <RotateCcw size={10} /> {t.resetBtn}
                         </button>
@@ -924,7 +1043,7 @@ export default function App() {
 
                   <div className="space-y-2 pt-2">
                     <label className="text-xs text-neutral-500 flex items-center gap-1">
-                      <Palette size={14} /> {labelStyle === 'banner' ? t.colorBanner : t.colorTape}
+                      <Palette size={14} /> {labelStyle === 'banner' ? t.colorBanner : labelStyle === 'badge' ? t.colorBadge : t.colorTape}
                     </label>
                     <div className="flex gap-3 items-center">
                       {TAPE_COLORS.map(color => (
@@ -1006,7 +1125,7 @@ export default function App() {
                   <Download size={15} className="text-neutral-400 shrink-0" />
                   <div>
                     <div className="font-medium">{t.downloadPng}</div>
-                    <div className="text-[11px] text-neutral-500">Universale, massima qualit\u00e0</div>
+                    <div className="text-[11px] text-neutral-500">Universale, massima qualità</div>
                   </div>
                 </button>
                 <div className="h-px bg-white/5" />
@@ -1028,7 +1147,7 @@ export default function App() {
                   <Download size={15} className="text-neutral-400 shrink-0" />
                   <div>
                     <div className="font-medium">{t.downloadIco}</div>
-                    <div className="text-[11px] text-neutral-500">6 risoluzioni (16\u2192256px)</div>
+                    <div className="text-[11px] text-neutral-500">6 risoluzioni (16→256px)</div>
                   </div>
                 </button>
               </div>
@@ -1083,7 +1202,7 @@ export default function App() {
 
         {!coverSrc && (
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-neutral-600 text-xs pointer-events-none select-none">
-            <span className="animate-bounce-x">\u2190</span>
+            <span className="animate-bounce-x">←</span>
             <span>{t.uploadHint}</span>
           </div>
         )}
