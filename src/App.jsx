@@ -288,6 +288,7 @@ const IconInstagram = ({ size = 16, className = '' }) => (
 
 export default function App() {
   const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [baseImgData, setBaseImgData] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
   const [coverImg, setCoverImg] = useState(null);
@@ -323,6 +324,8 @@ export default function App() {
   };
 
   const handleClearImage = () => {
+    // Revoca il blob URL precedente per evitare memory leak
+    if (coverSrc && coverSrc.startsWith('blob:')) URL.revokeObjectURL(coverSrc);
     setCoverSrc(null);
     setCoverImg(null);
     setCoverOffset({ x: 0, y: 0 });
@@ -367,31 +370,39 @@ export default function App() {
     img.src = coverSrc;
   }, [coverSrc]);
 
+  // FIX: usa URL.createObjectURL invece di FileReader
+  // → ogni upload genera un blob URL univoco, React vede sempre coverSrc cambiato
+  // → e.target.value = '' resetta l'input per permettere di ricaricare lo stesso file
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const src = event.target.result;
-      setCoverSrc(src);
-      setCoverOffset({ x: 0, y: 0 });
-      setCoverScale(1);
-      setCoverRotation(0);
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement('canvas');
-        c.width = 64; c.height = 64;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0, 64, 64);
-        const data = ctx.getImageData(0, 0, 64, 64).data;
-        let r = 0, g = 0, b = 0;
-        const n = data.length / 4;
-        for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i+1]; b += data[i+2]; }
-        setDominantColor(rgbToHex(Math.round(r/n), Math.round(g/n), Math.round(b/n)));
-      };
-      img.src = src;
+
+    // Revoca il blob URL precedente
+    if (coverSrc && coverSrc.startsWith('blob:')) URL.revokeObjectURL(coverSrc);
+
+    const objectUrl = URL.createObjectURL(file);
+    setCoverSrc(objectUrl);
+    setCoverOffset({ x: 0, y: 0 });
+    setCoverScale(1);
+    setCoverRotation(0);
+
+    // Estrai colore dominante
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = 64; c.height = 64;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, 64, 64);
+      const data = ctx.getImageData(0, 0, 64, 64).data;
+      let r = 0, g = 0, b = 0;
+      const n = data.length / 4;
+      for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i+1]; b += data[i+2]; }
+      setDominantColor(rgbToHex(Math.round(r/n), Math.round(g/n), Math.round(b/n)));
     };
-    reader.readAsDataURL(file);
+    img.src = objectUrl;
+
+    // Resetta il valore dell'input: permette di selezionare lo stesso file di nuovo
+    e.target.value = '';
   };
 
   const handlePointerDown = (e) => {
@@ -569,7 +580,7 @@ export default function App() {
                   <span className="font-medium text-sm text-neutral-300">{coverSrc ? t.changeImage : t.uploadImage}</span>
                   <span className="text-xs text-neutral-500">{t.uploadFormats}</span>
                 </div>
-                <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
               </label>
               {coverSrc && (
                 <button
