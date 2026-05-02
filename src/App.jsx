@@ -184,16 +184,10 @@ const loadSvgAsImage = (svgString) => new Promise((resolve, reject) => {
 
 // ─── Export helpers ──────────────────────────────────────────────────────────
 
-/**
- * Progressive downsampling: dimezza iterativamente finché non si raggiunge
- * la dimensione target. Produce risultati nettamente migliori rispetto a un
- * singolo drawImage su scale drastiche (es. 1024→16).
- */
 const resizeCanvas = (source, size) => {
   let current = source;
   let currentSize = source.width;
 
-  // Dimezza finché non siamo entro 2x della dimensione target
   while (currentSize > size * 2) {
     const half = Math.max(Math.floor(currentSize / 2), size);
     const tmp = document.createElement('canvas');
@@ -207,7 +201,6 @@ const resizeCanvas = (source, size) => {
     currentSize = half;
   }
 
-  // Step finale alla dimensione esatta
   const out = document.createElement('canvas');
   out.width = size;
   out.height = size;
@@ -718,13 +711,33 @@ export default function App() {
               </h2>
 
               <div className="relative">
-                <label className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all bg-[#09090b] border border-neutral-700/50 border-dashed rounded-xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 group">
-                  <div className="flex flex-col items-center space-y-2 text-center">
-                    <div className="p-3 bg-neutral-800 rounded-full group-hover:bg-blue-500/20 transition-colors">
-                      <Upload size={20} className="text-neutral-400 group-hover:text-blue-400" />
+                <label
+                  className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all border border-dashed rounded-xl cursor-pointer group overflow-hidden relative"
+                  style={coverSrc ? {
+                    backgroundImage: `url(${coverSrc})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                  } : {
+                    backgroundColor: '#09090b',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                  }}
+                >
+                  {/* overlay scuro quando c'è thumbnail */}
+                  {coverSrc && (
+                    <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors" />
+                  )}
+                  {!coverSrc && (
+                    <div className="absolute inset-0 group-hover:bg-blue-500/5 transition-colors rounded-xl" />
+                  )}
+                  <div className="relative z-10 flex flex-col items-center space-y-2 text-center">
+                    <div className={`p-3 rounded-full transition-colors ${coverSrc ? 'bg-white/10 group-hover:bg-white/20' : 'bg-neutral-800 group-hover:bg-blue-500/20'}`}>
+                      <Upload size={20} className={coverSrc ? 'text-white' : 'text-neutral-400 group-hover:text-blue-400'} />
                     </div>
-                    <span className="font-medium text-sm text-neutral-300">{coverSrc ? t.changeImage : t.uploadImage}</span>
-                    <span className="text-xs text-neutral-500">{t.uploadFormats}</span>
+                    <span className={`font-medium text-sm ${coverSrc ? 'text-white' : 'text-neutral-300'}`}>
+                      {coverSrc ? t.changeImage : t.uploadImage}
+                    </span>
+                    <span className={`text-xs ${coverSrc ? 'text-white/60' : 'text-neutral-500'}`}>{t.uploadFormats}</span>
                   </div>
                   <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
                 </label>
@@ -732,7 +745,7 @@ export default function App() {
                   <button
                     onClick={handleClearImage}
                     title={t.removeImage}
-                    className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-800 hover:bg-red-500/80 text-neutral-400 hover:text-white transition-all"
+                    className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-800 hover:bg-red-500/80 text-neutral-400 hover:text-white transition-all z-20"
                   >
                     <X size={12} />
                   </button>
