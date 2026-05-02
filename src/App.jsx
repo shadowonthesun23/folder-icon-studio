@@ -7,6 +7,7 @@ const TRANSLATIONS = {
     subtitle: 'Crea icone macOS customizzate.',
     section1: '1. Grafica',
     backColor: 'Sfondo retro',
+    defaultColor: 'Colore default',
     changeImage: 'Cambia immagine',
     uploadImage: 'Carica Immagine',
     uploadFormats: 'JPG, PNG, WEBP',
@@ -36,6 +37,7 @@ const TRANSLATIONS = {
     subtitle: 'Create custom macOS icons.',
     section1: '1. Artwork',
     backColor: 'Back color',
+    defaultColor: 'Default color',
     changeImage: 'Change Image',
     uploadImage: 'Upload Image',
     uploadFormats: 'JPG, PNG, WEBP',
@@ -283,6 +285,7 @@ export default function App() {
   const [fontSizeMultiplier, setFontSizeMultiplier] = useState(1);
   const [fontFamily, setFontFamily] = useState('Space Mono');
   const [dominantColor, setDominantColor] = useState('#4a90e2');
+  const [useDefaultColor, setUseDefaultColor] = useState(false);
   const folderShape = 'classic';
   const [coverOffset, setCoverOffset] = useState({ x: 0, y: 0 });
   const [coverScale, setCoverScale] = useState(1);
@@ -316,7 +319,6 @@ export default function App() {
       .catch(err => console.error('Folder load error:', err));
   }, [folderShape]);
 
-  // Cache dell'immagine copertina: si aggiorna solo quando cambia coverSrc
   useEffect(() => {
     if (!coverSrc) {
       coverImgRef.current = null;
@@ -411,7 +413,7 @@ export default function App() {
 
       ctx.save();
       ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
-      if (coverSrc && shape.tintFolder) {
+      if (coverSrc && shape.tintFolder && !useDefaultColor) {
         ctx.globalCompositeOperation = 'color';
         ctx.fillStyle = dominantColor;
         ctx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
@@ -467,7 +469,7 @@ export default function App() {
     };
 
     render();
-  }, [baseImgData, coverSrc, label, labelStyle, tapeColor, tapeOpacity, dominantColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, coverSrc, label, labelStyle, tapeColor, tapeOpacity, dominantColor, useDefaultColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -486,7 +488,6 @@ export default function App() {
       <span style={{ fontFamily: 'Space Mono', position: 'absolute', opacity: 0, pointerEvents: 'none' }}>.</span>
 
       <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[45dvh] lg:h-full overflow-y-auto custom-scrollbar">
-        {/* Header – lang toggle floats top-right, compact */}
         <div className="relative p-6 lg:p-8 pb-4 lg:pb-6 border-b border-white/5 shrink-0">
           <div className="absolute top-4 right-5 lg:top-5 lg:right-7 flex items-center gap-0.5 bg-[#09090b] border border-neutral-800 rounded-md p-0.5">
             {['it', 'en'].map(l => (
@@ -517,12 +518,27 @@ export default function App() {
                 <LucideImage size={16} /> {t.section1}
               </h2>
               {coverSrc && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-neutral-500">{t.backColor}</span>
-                  <label className="relative flex items-center justify-center w-6 h-6 rounded-full border border-white/20 shadow-sm cursor-pointer overflow-hidden transition-transform hover:scale-110">
-                    <input type="color" value={dominantColor} onChange={e => setDominantColor(e.target.value)} className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer" />
-                    <div className="w-full h-full pointer-events-none" style={{ backgroundColor: dominantColor }} />
-                  </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setUseDefaultColor(v => !v)}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-medium transition-all ${
+                      useDefaultColor
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                        : 'border-neutral-700/50 bg-[#09090b] text-neutral-500 hover:border-neutral-500 hover:text-neutral-300'
+                    }`}
+                    title={t.defaultColor}
+                  >
+                    🔵 {t.defaultColor}
+                  </button>
+                  {!useDefaultColor && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-neutral-500">{t.backColor}</span>
+                      <label className="relative flex items-center justify-center w-6 h-6 rounded-full border border-white/20 shadow-sm cursor-pointer overflow-hidden transition-transform hover:scale-110">
+                        <input type="color" value={dominantColor} onChange={e => setDominantColor(e.target.value)} className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer" />
+                        <div className="w-full h-full pointer-events-none" style={{ backgroundColor: dominantColor }} />
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
