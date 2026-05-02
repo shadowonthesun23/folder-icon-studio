@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw } from 'lucide-react';
+import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
 const TRANSLATIONS = {
   it: {
     subtitle: 'Crea icone macOS customizzate.',
     section1: '1. Grafica',
-    backColor: 'Sfondo retro',
-    defaultColor: 'Colore default',
+    folderColor: 'Colore cartella',
+    defaultColor: 'Default',
     changeImage: 'Cambia immagine',
     uploadImage: 'Carica Immagine',
     uploadFormats: 'JPG, PNG, WEBP',
@@ -32,12 +32,13 @@ const TRANSLATIONS = {
     dragCanvasHint: 'Clicca e trascina per posizionare',
     customColor: 'Colore personalizzato',
     coverRotation: 'Rotazione',
+    removeImage: 'Rimuovi immagine',
   },
   en: {
     subtitle: 'Create custom macOS icons.',
     section1: '1. Artwork',
-    backColor: 'Back color',
-    defaultColor: 'Default color',
+    folderColor: 'Folder color',
+    defaultColor: 'Default',
     changeImage: 'Change Image',
     uploadImage: 'Upload Image',
     uploadFormats: 'JPG, PNG, WEBP',
@@ -62,8 +63,22 @@ const TRANSLATIONS = {
     dragCanvasHint: 'Click and drag to position',
     customColor: 'Custom color',
     coverRotation: 'Rotation',
+    removeImage: 'Remove image',
   }
 };
+
+// macOS-inspired folder color presets
+const FOLDER_COLORS = [
+  { id: 'default', hex: null, name: 'Default' },
+  { id: 'blue', hex: '#4B8EF0', name: 'Blu' },
+  { id: 'purple', hex: '#9B6EE8', name: 'Viola' },
+  { id: 'pink', hex: '#E86E9B', name: 'Rosa' },
+  { id: 'red', hex: '#E85E5E', name: 'Rosso' },
+  { id: 'orange', hex: '#E8924B', name: 'Arancione' },
+  { id: 'yellow', hex: '#E8C84B', name: 'Giallo' },
+  { id: 'green', hex: '#5EBF6E', name: 'Verde' },
+  { id: 'gray', hex: '#8E8E93', name: 'Grigio' },
+];
 
 const FOLDERS = {
   classic: {
@@ -284,8 +299,9 @@ export default function App() {
   const [tapeRotation, setTapeRotation] = useState(-2.3);
   const [fontSizeMultiplier, setFontSizeMultiplier] = useState(1);
   const [fontFamily, setFontFamily] = useState('Space Mono');
-  const [dominantColor, setDominantColor] = useState('#4a90e2');
-  const [useDefaultColor, setUseDefaultColor] = useState(false);
+  const [dominantColor, setDominantColor] = useState(null); // null = usa colore SVG nativo
+  const [folderColorOverride, setFolderColorOverride] = useState(null); // null = default SVG
+  const [customFolderColor, setCustomFolderColor] = useState('#4B8EF0');
   const folderShape = 'classic';
   const [coverOffset, setCoverOffset] = useState({ x: 0, y: 0 });
   const [coverScale, setCoverScale] = useState(1);
@@ -299,9 +315,23 @@ export default function App() {
 
   const t = TRANSLATIONS[lang];
 
+  // Il colore effettivo da usare per il tinting:
+  // 1. Se c'è un override manuale (preset o custom picker) -> usalo sempre
+  // 2. Altrimenti se c'è immagine -> usa il colore dominante estratto
+  // 3. Altrimenti -> null (nessun tinting, SVG blu nativo)
+  const effectiveTintColor = folderColorOverride ?? dominantColor ?? null;
+
   const switchLang = (l) => {
     setLang(l);
     try { localStorage.setItem('fis_lang', l); } catch {}
+  };
+
+  const handleClearImage = () => {
+    setCoverSrc(null);
+    setCoverOffset({ x: 0, y: 0 });
+    setCoverScale(1);
+    setCoverRotation(0);
+    setDominantColor(null);
   };
 
   useEffect(() => {
@@ -339,6 +369,7 @@ export default function App() {
       setCoverOffset({ x: 0, y: 0 });
       setCoverScale(1);
       setCoverRotation(0);
+      // Estrai colore dominante solo se non c'è già un override manuale
       const img = new Image();
       img.onload = () => {
         const c = document.createElement('canvas');
@@ -413,9 +444,9 @@ export default function App() {
 
       ctx.save();
       ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
-      if (coverSrc && shape.tintFolder && !useDefaultColor) {
+      if (shape.tintFolder && effectiveTintColor) {
         ctx.globalCompositeOperation = 'color';
-        ctx.fillStyle = dominantColor;
+        ctx.fillStyle = effectiveTintColor;
         ctx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
         ctx.globalCompositeOperation = 'destination-in';
         ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
@@ -469,7 +500,7 @@ export default function App() {
     };
 
     render();
-  }, [baseImgData, coverSrc, label, labelStyle, tapeColor, tapeOpacity, dominantColor, useDefaultColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, coverSrc, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -482,6 +513,7 @@ export default function App() {
   };
 
   const isPresetColor = TAPE_COLORS.some(c => c.hex === tapeColor);
+  const isCustomFolderColor = folderColorOverride !== null && !FOLDER_COLORS.slice(1).some(c => c.hex === folderColorOverride);
 
   return (
     <div className="flex flex-col lg:flex-row h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-hidden">
@@ -513,47 +545,34 @@ export default function App() {
 
         <div className="p-6 lg:p-8 flex flex-col gap-6 lg:gap-8">
           <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
-                <LucideImage size={16} /> {t.section1}
-              </h2>
-              {coverSrc && (
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setUseDefaultColor(v => !v)}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-medium transition-all ${
-                      useDefaultColor
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-300'
-                        : 'border-neutral-700/50 bg-[#09090b] text-neutral-500 hover:border-neutral-500 hover:text-neutral-300'
-                    }`}
-                    title={t.defaultColor}
-                  >
-                    🔵 {t.defaultColor}
-                  </button>
-                  {!useDefaultColor && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-neutral-500">{t.backColor}</span>
-                      <label className="relative flex items-center justify-center w-6 h-6 rounded-full border border-white/20 shadow-sm cursor-pointer overflow-hidden transition-transform hover:scale-110">
-                        <input type="color" value={dominantColor} onChange={e => setDominantColor(e.target.value)} className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer" />
-                        <div className="w-full h-full pointer-events-none" style={{ backgroundColor: dominantColor }} />
-                      </label>
-                    </div>
-                  )}
+            <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
+              <LucideImage size={16} /> {t.section1}
+            </h2>
+
+            {/* Upload area */}
+            <div className="relative">
+              <label className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all bg-[#09090b] border border-neutral-700/50 border-dashed rounded-xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 group">
+                <div className="flex flex-col items-center space-y-2 text-center">
+                  <div className="p-3 bg-neutral-800 rounded-full group-hover:bg-blue-500/20 transition-colors">
+                    <Upload size={20} className="text-neutral-400 group-hover:text-blue-400" />
+                  </div>
+                  <span className="font-medium text-sm text-neutral-300">{coverSrc ? t.changeImage : t.uploadImage}</span>
+                  <span className="text-xs text-neutral-500">{t.uploadFormats}</span>
                 </div>
+                <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+              </label>
+              {coverSrc && (
+                <button
+                  onClick={handleClearImage}
+                  title={t.removeImage}
+                  className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-800 hover:bg-red-500/80 text-neutral-400 hover:text-white transition-all"
+                >
+                  <X size={12} />
+                </button>
               )}
             </div>
 
-            <label className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all bg-[#09090b] border border-neutral-700/50 border-dashed rounded-xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 group">
-              <div className="flex flex-col items-center space-y-2 text-center">
-                <div className="p-3 bg-neutral-800 rounded-full group-hover:bg-blue-500/20 transition-colors">
-                  <Upload size={20} className="text-neutral-400 group-hover:text-blue-400" />
-                </div>
-                <span className="font-medium text-sm text-neutral-300">{coverSrc ? t.changeImage : t.uploadImage}</span>
-                <span className="text-xs text-neutral-500">{t.uploadFormats}</span>
-              </div>
-              <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
-            </label>
-
+            {/* Zoom e Rotazione immagine */}
             {coverSrc && (
               <div className="bg-[#09090b] p-4 rounded-xl border border-neutral-800/50 space-y-4">
                 <div>
@@ -567,13 +586,74 @@ export default function App() {
                 <div>
                   <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
                     <span className="flex items-center gap-1"><RotateCw size={14} /> {t.coverRotation}</span>
-                    <span>{coverRotation}°</span>
+                    <span>{coverRotation}\u00b0</span>
                   </div>
                   <input type="range" min="-180" max="180" step="1" value={coverRotation} onChange={e => setCoverRotation(parseInt(e.target.value))}
                     className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                 </div>
               </div>
             )}
+
+            {/* Colore cartella — sempre visibile */}
+            <div className="space-y-2">
+              <label className="text-xs text-neutral-500 flex items-center gap-1">
+                <Palette size={13} /> {t.folderColor}
+              </label>
+              <div className="flex flex-wrap gap-2 items-center">
+                {/* Default (nessun tint) */}
+                <button
+                  onClick={() => setFolderColorOverride(null)}
+                  title={t.defaultColor}
+                  className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all text-[9px] font-bold ${
+                    folderColorOverride === null
+                      ? 'border-blue-500 scale-110 bg-[#4B8EF0] text-white'
+                      : 'border-neutral-600 bg-gradient-to-br from-[#6aadff] to-[#2171e8] hover:scale-105'
+                  }`}
+                >
+                  {folderColorOverride === null && <Check size={11} />}
+                </button>
+                {/* Preset colori */}
+                {FOLDER_COLORS.slice(1).map(color => (
+                  <button
+                    key={color.id}
+                    onClick={() => setFolderColorOverride(color.hex)}
+                    title={color.name}
+                    className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                      folderColorOverride === color.hex && !isCustomFolderColor
+                        ? 'border-white scale-110'
+                        : 'border-transparent hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: color.hex }}
+                  >
+                    {folderColorOverride === color.hex && !isCustomFolderColor && (
+                      <Check size={11} style={{ color: getTapeTextColor(color.hex) }} />
+                    )}
+                  </button>
+                ))}
+                {/* Custom color picker */}
+                <label
+                  className={`w-7 h-7 rounded-full border-2 cursor-pointer flex items-center justify-center overflow-hidden transition-all hover:scale-105 ${
+                    isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
+                  }`}
+                  style={isCustomFolderColor ? { backgroundColor: folderColorOverride } : {}}
+                  title={t.customColor}
+                >
+                  <input
+                    type="color"
+                    value={isCustomFolderColor ? folderColorOverride : customFolderColor}
+                    onChange={e => {
+                      setCustomFolderColor(e.target.value);
+                      setFolderColorOverride(e.target.value);
+                    }}
+                    className="absolute opacity-0 w-[200%] h-[200%] cursor-pointer"
+                  />
+                  {isCustomFolderColor
+                    ? <Check size={11} style={{ color: '#fff', mixBlendMode: 'difference' }} className="pointer-events-none" />
+                    : <Palette size={11} className="text-neutral-400 pointer-events-none" />
+                  }
+                </label>
+              </div>
+            </div>
           </section>
 
           <hr className="border-white/5" />
@@ -638,7 +718,7 @@ export default function App() {
                     <div className="flex justify-between items-center text-xs text-neutral-400">
                       <span className="flex items-center gap-1"><RotateCw size={13} /> {t.tapeAngle}</span>
                       <div className="flex items-center gap-1">
-                        <span>{tapeRotation.toFixed(1)}°</span>
+                        <span>{tapeRotation.toFixed(1)}\u00b0</span>
                         {tapeRotation !== -2.3 && (
                           <button onClick={() => setTapeRotation(-2.3)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
                             <RotateCcw size={10} />
@@ -756,7 +836,7 @@ export default function App() {
 
         {!coverSrc && (
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-neutral-600 text-xs pointer-events-none select-none">
-            <span className="animate-bounce-x">←</span>
+            <span className="animate-bounce-x">\u2190</span>
             <span>{t.uploadHint}</span>
           </div>
         )}
