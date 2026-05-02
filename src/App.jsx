@@ -67,7 +67,6 @@ const TRANSLATIONS = {
   }
 };
 
-// macOS-inspired folder color presets
 const FOLDER_COLORS = [
   { id: 'default', hex: null, name: 'Default' },
   { id: 'blue', hex: '#4B8EF0', name: 'Blu' },
@@ -299,26 +298,23 @@ export default function App() {
   const [tapeRotation, setTapeRotation] = useState(-2.3);
   const [fontSizeMultiplier, setFontSizeMultiplier] = useState(1);
   const [fontFamily, setFontFamily] = useState('Space Mono');
-  const [dominantColor, setDominantColor] = useState(null); // null = usa colore SVG nativo
-  const [folderColorOverride, setFolderColorOverride] = useState(null); // null = default SVG
+  const [dominantColor, setDominantColor] = useState(null);
+  const [folderColorOverride, setFolderColorOverride] = useState(null);
   const [customFolderColor, setCustomFolderColor] = useState('#4B8EF0');
   const folderShape = 'classic';
   const [coverOffset, setCoverOffset] = useState({ x: 0, y: 0 });
   const [coverScale, setCoverScale] = useState(1);
   const [coverRotation, setCoverRotation] = useState(0);
   const [tapeOffset, setTapeOffset] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(null);
-  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  // dragging gestito come ref per evitare re-render durante pointermove
+  const draggingRef = useRef(null);
+  const dragStartPosRef = useRef({ x: 0, y: 0 });
   const [lang, setLang] = useState(() => {
     try { return localStorage.getItem('fis_lang') || 'it'; } catch { return 'it'; }
   });
 
   const t = TRANSLATIONS[lang];
 
-  // Il colore effettivo da usare per il tinting:
-  // 1. Se c'è un override manuale (preset o custom picker) -> usalo sempre
-  // 2. Altrimenti se c'è immagine -> usa il colore dominante estratto
-  // 3. Altrimenti -> null (nessun tinting, SVG blu nativo)
   const effectiveTintColor = folderColorOverride ?? dominantColor ?? null;
 
   const switchLang = (l) => {
@@ -333,6 +329,24 @@ export default function App() {
     setCoverRotation(0);
     setDominantColor(null);
   };
+
+  // Aggiorna il cursore del canvas in modo imperativo, senza toccare il DOM React
+  const updateCursor = (isDragging) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (isDragging) {
+      canvas.style.cursor = 'grabbing';
+    } else if (coverSrc) {
+      canvas.style.cursor = 'grab';
+    } else {
+      canvas.style.cursor = 'default';
+    }
+  };
+
+  // Sincronizza il cursore quando cambia coverSrc (senza drag attivo)
+  useEffect(() => {
+    updateCursor(false);
+  }, [coverSrc]);
 
   useEffect(() => {
     const link = document.createElement('link');
@@ -369,7 +383,6 @@ export default function App() {
       setCoverOffset({ x: 0, y: 0 });
       setCoverScale(1);
       setCoverRotation(0);
-      // Estrai colore dominante solo se non c'è già un override manuale
       const img = new Image();
       img.onload = () => {
         const c = document.createElement('canvas');
@@ -401,32 +414,34 @@ export default function App() {
       const tX = canvas.width / 2 - tapeW / 2 + tapeOffset.x;
       const tY = canvas.height * 0.55 - tapeH / 2 + tapeOffset.y;
       if (label.trim() !== '' && x >= tX && x <= tX + tapeW && y >= tY && y <= tY + tapeH) {
-        setDragging('tape');
+        draggingRef.current = 'tape';
       } else if (coverSrc) {
-        setDragging('cover');
+        draggingRef.current = 'cover';
       }
     } else if (coverSrc) {
-      setDragging('cover');
+      draggingRef.current = 'cover';
     }
-    setDragStartPos({ x: e.clientX, y: e.clientY });
+    if (draggingRef.current) updateCursor(true);
+    dragStartPosRef.current = { x: e.clientX, y: e.clientY };
     if (e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e) => {
-    if (!dragging) return;
+    if (!draggingRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const dx = (e.clientX - dragStartPos.x) * scaleX;
-    const dy = (e.clientY - dragStartPos.y) * scaleY;
-    if (dragging === 'tape') setTapeOffset(p => ({ x: p.x + dx, y: p.y + dy }));
-    else if (dragging === 'cover') setCoverOffset(p => ({ x: p.x + dx, y: p.y + dy }));
-    setDragStartPos({ x: e.clientX, y: e.clientY });
+    const dx = (e.clientX - dragStartPosRef.current.x) * scaleX;
+    const dy = (e.clientY - dragStartPosRef.current.y) * scaleY;
+    if (draggingRef.current === 'tape') setTapeOffset(p => ({ x: p.x + dx, y: p.y + dy }));
+    else if (draggingRef.current === 'cover') setCoverOffset(p => ({ x: p.x + dx, y: p.y + dy }));
+    dragStartPosRef.current = { x: e.clientX, y: e.clientY };
   };
 
   const handlePointerUp = (e) => {
-    setDragging(null);
+    draggingRef.current = null;
+    updateCursor(false);
     if (e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId);
   };
 
@@ -549,7 +564,6 @@ export default function App() {
               <LucideImage size={16} /> {t.section1}
             </h2>
 
-            {/* Upload area */}
             <div className="relative">
               <label className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all bg-[#09090b] border border-neutral-700/50 border-dashed rounded-xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 group">
                 <div className="flex flex-col items-center space-y-2 text-center">
@@ -572,7 +586,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Zoom e Rotazione immagine */}
             {coverSrc && (
               <div className="bg-[#09090b] p-4 rounded-xl border border-neutral-800/50 space-y-4">
                 <div>
@@ -594,17 +607,15 @@ export default function App() {
               </div>
             )}
 
-            {/* Colore cartella — sempre visibile */}
             <div className="space-y-2">
               <label className="text-xs text-neutral-500 flex items-center gap-1">
                 <Palette size={13} /> {t.folderColor}
               </label>
               <div className="flex flex-wrap gap-2 items-center">
-                {/* Default (nessun tint) */}
                 <button
                   onClick={() => setFolderColorOverride(null)}
                   title={t.defaultColor}
-                  className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all text-[9px] font-bold ${
+                  className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
                     folderColorOverride === null
                       ? 'border-blue-500 scale-110 bg-[#4B8EF0] text-white'
                       : 'border-neutral-600 bg-gradient-to-br from-[#6aadff] to-[#2171e8] hover:scale-105'
@@ -612,7 +623,6 @@ export default function App() {
                 >
                   {folderColorOverride === null && <Check size={11} />}
                 </button>
-                {/* Preset colori */}
                 {FOLDER_COLORS.slice(1).map(color => (
                   <button
                     key={color.id}
@@ -630,7 +640,6 @@ export default function App() {
                     )}
                   </button>
                 ))}
-                {/* Custom color picker */}
                 <label
                   className={`w-7 h-7 rounded-full border-2 cursor-pointer flex items-center justify-center overflow-hidden transition-all hover:scale-105 ${
                     isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
@@ -847,12 +856,17 @@ export default function App() {
               <Move size={12} /> {t.dragCanvasHint}
             </div>
           )}
-          <canvas ref={canvasRef} width={1024} height={1024}
-            onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp}
-            className={`max-w-full max-h-full aspect-square object-contain drop-shadow-2xl ${
-              dragging ? 'cursor-grabbing' : (coverSrc ? 'cursor-grab' : 'cursor-default')
-            }`} />
+          {/* className statico: nessuna dipendenza da state che cambia durante il drag */}
+          <canvas
+            ref={canvasRef}
+            width={1024}
+            height={1024}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            className="max-w-full max-h-full aspect-square object-contain drop-shadow-2xl"
+          />
         </div>
       </main>
       <Analytics />
