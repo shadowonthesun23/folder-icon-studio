@@ -111,6 +111,18 @@ const FOLDER_COLORS = [
   { id: 'gray', hex: '#8E8E93', name: 'Grigio' },
 ];
 
+// PNG cassette reale: 2185 × 1400
+const CASSETTE_PNG_W = 2185;
+const CASSETTE_PNG_H = 1400;
+
+// Area label in coordinate PNG assolute (misurate in Photoshop)
+// x=137, y=42, w=1910, h=922
+const CASSETTE_LABEL_X = 137;
+const CASSETTE_LABEL_Y = 42;
+const CASSETTE_LABEL_W = 1910;
+const CASSETTE_LABEL_H = 922;
+const CASSETTE_LABEL_R = 40; // border-radius in px PNG
+
 const FOLDERS = {
   classic: {
     id: 'classic',
@@ -145,29 +157,55 @@ const FOLDERS = {
     name: 'Cassetta',
     tintFolder: false,
     url: null,
-    getFolderRect: (cw, ch) => ({ x: 0, y: 0, w: cw, h: ch }),
-    // PNG reale: 2185 x 1400
-    // Area label (da Photoshop): x≈0, y≈0, w≈1910, h≈922
-    clipRect: { x: 0, y: 0, w: 1910, h: 922, vw: 2185, vh: 1400 },
+    // getFolderRect calcola posizione e dimensioni per disegnare la PNG
+    // nel canvas 1024x1024 mantenendo le proporzioni 2185:1400
+    getFolderRect: (cw, ch) => {
+      const pngRatio = CASSETTE_PNG_W / CASSETTE_PNG_H; // ~1.5607
+      let w, h, x, y;
+      if (cw / ch > pngRatio) {
+        // canvas più largo: fit per altezza
+        h = ch;
+        w = h * pngRatio;
+        x = (cw - w) / 2;
+        y = 0;
+      } else {
+        // canvas più alto: fit per larghezza
+        w = cw;
+        h = w / pngRatio;
+        x = 0;
+        y = (ch - h) / 2;
+      }
+      return { x, y, w, h };
+    },
+    // clipRect in coordinate PNG assolute — usato solo da drawBanner
+    clipRect: {
+      x: CASSETTE_LABEL_X,
+      y: CASSETTE_LABEL_Y,
+      w: CASSETTE_LABEL_W,
+      h: CASSETTE_LABEL_H,
+      vw: CASSETTE_PNG_W,
+      vh: CASSETTE_PNG_H,
+    },
     buildFlapPath: (ctx, rect) => {
-      // Scala basata sulle dimensioni reali della PNG sorgente
-      const sX = rect.w / 2185;
-      const sY = rect.h / 1400;
-      const wx = rect.x + 0 * sX;
-      const wy = rect.y + 0 * sY;
-      const ww = 1910 * sX;
-      const wh = 922 * sY;
-      const wr = 40 * Math.min(sX, sY);
+      // rect = { x, y, w, h } = posizione cassetta nel canvas
+      // scala da PNG a canvas
+      const sX = rect.w / CASSETTE_PNG_W;
+      const sY = rect.h / CASSETTE_PNG_H;
+      const x = rect.x + CASSETTE_LABEL_X * sX;
+      const y = rect.y + CASSETTE_LABEL_Y * sY;
+      const w = CASSETTE_LABEL_W * sX;
+      const h = CASSETTE_LABEL_H * sY;
+      const r = CASSETTE_LABEL_R * Math.min(sX, sY);
       ctx.beginPath();
-      ctx.moveTo(wx + wr, wy);
-      ctx.lineTo(wx + ww - wr, wy);
-      ctx.arcTo(wx + ww, wy, wx + ww, wy + wh, wr);
-      ctx.lineTo(wx + ww, wy + wh - wr);
-      ctx.arcTo(wx + ww, wy + wh, wx, wy + wh, wr);
-      ctx.lineTo(wx + wr, wy + wh);
-      ctx.arcTo(wx, wy + wh, wx, wy, wr);
-      ctx.lineTo(wx, wy + wr);
-      ctx.arcTo(wx, wy, wx + ww, wy, wr);
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.lineTo(x + r, y + h);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.lineTo(x, y + r);
+      ctx.arcTo(x, y, x + w, y, r);
       ctx.closePath();
     },
   }
