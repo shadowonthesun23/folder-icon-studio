@@ -308,7 +308,6 @@ export default function App() {
   const [tapeOffset, setTapeOffset] = useState({ x: 0, y: 0 });
   const draggingRef = useRef(null);
   const dragStartPosRef = useRef({ x: 0, y: 0 });
-  // ref per i due input color custom
   const folderColorInputRef = useRef(null);
   const tapeColorInputRef = useRef(null);
   const [lang, setLang] = useState(() => {
@@ -447,17 +446,26 @@ export default function App() {
       const shape = FOLDERS[folderShape];
       const folderRect = shape.getFolderRect(w, h);
 
-      ctx.save();
-      ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+      // --- Disegno cartella con tinting su canvas offscreen ---
       if (shape.tintFolder && effectiveTintColor) {
-        ctx.globalCompositeOperation = 'color';
-        ctx.fillStyle = effectiveTintColor;
-        ctx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
-        ctx.globalCompositeOperation = 'destination-in';
+        // Canvas offscreen: applica tint senza toccare il canvas principale
+        const offscreen = document.createElement('canvas');
+        offscreen.width = w;
+        offscreen.height = h;
+        const offCtx = offscreen.getContext('2d');
+        offCtx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        offCtx.globalCompositeOperation = 'color';
+        offCtx.fillStyle = effectiveTintColor;
+        offCtx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        offCtx.globalCompositeOperation = 'destination-in';
+        offCtx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        // Ora composita il risultato sul canvas principale senza side effects
+        ctx.drawImage(offscreen, 0, 0);
+      } else {
         ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
-      ctx.restore();
 
+      // --- Cover image ---
       const coverImg = coverImgRef.current;
       if (coverSrc && coverImg) {
         ctx.save();
@@ -629,7 +637,6 @@ export default function App() {
                     )}
                   </button>
                 ))}
-                {/* Custom color picker per cartella — bottone separato dall'input */}
                 <button
                   onClick={() => folderColorInputRef.current?.click()}
                   title={t.customColor}
@@ -760,7 +767,6 @@ export default function App() {
                         {tapeColor === color.hex && <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />}
                       </button>
                     ))}
-                    {/* Custom color picker per nastro — bottone separato dall'input */}
                     <button
                       onClick={() => tapeColorInputRef.current?.click()}
                       title={t.customColor}
