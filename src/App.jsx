@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown, Circle, Undo2, Redo2, BookmarkPlus, Bookmark, Trash2, Info } from 'lucide-react';
+import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown, Circle, Undo2, Redo2, BookmarkPlus, Bookmark, Trash2, Info, Maximize2 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
 const TRANSLATIONS = {
@@ -22,7 +22,8 @@ const TRANSLATIONS = {
     labelText: 'Testo (lascia vuoto per nascondere)',
     labelPlaceholder: 'Es. Progetto X',
     font: 'Font',
-    fontSize: 'Dimensione',
+    fontSize: 'Dimensione testo',
+    tapeSize: 'Dimensione nastro',
     badgeSize: 'Dimensione badge',
     tapeAngle: 'Inclinazione nastro',
     resetTip: 'Ripristina',
@@ -70,7 +71,8 @@ const TRANSLATIONS = {
     labelText: 'Text (leave empty to hide)',
     labelPlaceholder: 'e.g. Project X',
     font: 'Font',
-    fontSize: 'Size',
+    fontSize: 'Text size',
+    tapeSize: 'Tape size',
     badgeSize: 'Badge size',
     tapeAngle: 'Tape angle',
     resetTip: 'Reset',
@@ -113,11 +115,8 @@ const FOLDER_COLORS = [
   { id: 'gray', hex: '#8E8E93', name: 'Grigio' },
 ];
 
-// Dimensioni native cassette-base.png
 const CASSETTE_PNG_W = 2183;
 const CASSETTE_PNG_H = 1417;
-
-// Area label misurata su cassette-base.png
 const CASSETTE_LABEL_X = 135;
 const CASSETTE_LABEL_Y = 103;
 const CASSETTE_LABEL_W = 1909;
@@ -303,8 +302,10 @@ const buildIco = async (canvas) => {
 
 // ─── Canvas drawing helpers ───────────────────────────────────────────────────
 
-const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, tapeRotationDeg, fontSizeMultiplier, fontFamily) => {
-  const tapeW = w * 0.55, tapeH = h * 0.12;
+// tapeScale scala proporzionalmente larghezza e altezza del nastro
+const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, tapeRotationDeg, fontSizeMultiplier, fontFamily, tapeScale = 1) => {
+  const tapeW = w * 0.55 * tapeScale;
+  const tapeH = h * 0.12 * tapeScale;
   const tapeBaseX = w / 2 - tapeW / 2, tapeBaseY = h * 0.55 - tapeH / 2;
   const x = tapeBaseX + tapeOffsetX, y = tapeBaseY + tapeOffsetY;
   ctx.save();
@@ -315,10 +316,11 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, t
   ctx.fillStyle = tapeHex;
   ctx.beginPath();
   const zigs = 14, zigH = tapeH / zigs;
+  const zigAmp = Math.max(4, 8 * tapeScale);
   ctx.moveTo(x, y);
-  for (let i = 1; i <= zigs; i++) ctx.lineTo(x + (i % 2 === 0 ? 0 : 8), y + i * zigH);
+  for (let i = 1; i <= zigs; i++) ctx.lineTo(x + (i % 2 === 0 ? 0 : zigAmp), y + i * zigH);
   ctx.lineTo(x + tapeW, y + tapeH);
-  for (let i = zigs - 1; i >= 0; i--) ctx.lineTo(x + tapeW - (i % 2 === 0 ? 0 : 8), y + i * zigH);
+  for (let i = zigs - 1; i >= 0; i--) ctx.lineTo(x + tapeW - (i % 2 === 0 ? 0 : zigAmp), y + i * zigH);
   ctx.lineTo(x, y); ctx.closePath();
   ctx.globalAlpha = opacity; ctx.fill(); ctx.globalAlpha = 1;
   ctx.shadowColor = 'transparent';
@@ -445,6 +447,7 @@ export default function App() {
   const [tapeColor, setTapeColor] = useState('#f4ebd0');
   const [tapeOpacity, setTapeOpacity] = useState(1);
   const [tapeRotation, setTapeRotation] = useState(-2.3);
+  const [tapeScale, setTapeScale] = useState(1);
   const [fontSizeMultiplier, setFontSizeMultiplier] = useState(1);
   const [fontFamily, setFontFamily] = useState('Space Mono');
   const [dominantColor, setDominantColor] = useState(null);
@@ -476,7 +479,7 @@ export default function App() {
 
   const stateRef = useRef({
     label: 'Archivio 01', labelStyle: 'dymo', tapeColor: '#f4ebd0', tapeOpacity: 1,
-    tapeRotation: -2.3, fontSizeMultiplier: 1, fontFamily: 'Space Mono',
+    tapeRotation: -2.3, tapeScale: 1, fontSizeMultiplier: 1, fontFamily: 'Space Mono',
     tapeOffset: { x: 0, y: 0 }, badgeOffset: { x: 0, y: 0 }, badgeSize: 160,
     coverOffset: { x: 0, y: 0 }, coverScale: 1, coverRotation: 0, folderColorOverride: null,
   });
@@ -487,24 +490,23 @@ export default function App() {
 
   const t = TRANSLATIONS[lang];
 
-  // Per classic: usa dominantColor come fallback. Per cassette: solo folderColorOverride esplicito.
   const effectiveTintColor = folderShape === 'cassette'
     ? folderColorOverride
     : (folderColorOverride ?? dominantColor ?? null);
 
   useEffect(() => {
     stateRef.current = {
-      label, labelStyle, tapeColor, tapeOpacity, tapeRotation,
+      label, labelStyle, tapeColor, tapeOpacity, tapeRotation, tapeScale,
       fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize,
       coverOffset, coverScale, coverRotation, folderColorOverride,
     };
   });
 
-  // Quando si passa a cassette: reset label e forza stile non-banner
+  // Quando si passa a cassette: reset label, forza stile non-banner e non-badge
   useEffect(() => {
     if (folderShape === 'cassette') {
       setLabel('');
-      setLabelStyle(prev => prev === 'banner' ? 'dymo' : prev);
+      setLabelStyle(prev => (prev === 'banner' || prev === 'badge') ? 'dymo' : prev);
     }
   }, [folderShape]);
 
@@ -524,6 +526,7 @@ export default function App() {
     isRestoringRef.current = true;
     setLabel(snap.label); setLabelStyle(snap.labelStyle); setTapeColor(snap.tapeColor);
     setTapeOpacity(snap.tapeOpacity); setTapeRotation(snap.tapeRotation);
+    setTapeScale(snap.tapeScale ?? 1);
     setFontSizeMultiplier(snap.fontSizeMultiplier); setFontFamily(snap.fontFamily);
     setTapeOffset(snap.tapeOffset); setBadgeOffset(snap.badgeOffset); setBadgeSize(snap.badgeSize);
     setCoverOffset(snap.coverOffset); setCoverScale(snap.coverScale); setCoverRotation(snap.coverRotation);
@@ -625,7 +628,6 @@ export default function App() {
     document.head.appendChild(link);
   }, []);
 
-  // ─── Load SVG folder ──────────────────────────────────────────────────────────
   useEffect(() => {
     setBaseImgData(null);
     if (folderShape === 'cassette') return;
@@ -634,7 +636,6 @@ export default function App() {
       .catch(err => console.error('Folder load error:', err));
   }, [folderShape]);
 
-  // ─── Load cassette assets ─────────────────────────────────────────────────────
   useEffect(() => {
     if (folderShape !== 'cassette') return;
     setCassetteBaseImg(null); setCassetteOverlayImg(null); setCassetteMaskImg(null);
@@ -643,16 +644,12 @@ export default function App() {
       loadPngAsImage('/cassette-overlay.png'),
       new Promise((resolve, reject) => {
         const img = new Image();
-        img.width = CASSETTE_LABEL_W;
-        img.height = CASSETTE_LABEL_H;
         img.onload = () => resolve(img);
         img.onerror = () => reject(new Error('maschera.svg load failed'));
         img.src = '/maschera.svg';
       }),
     ]).then(([base, overlay, mask]) => {
-      setCassetteBaseImg(base);
-      setCassetteOverlayImg(overlay);
-      setCassetteMaskImg(mask);
+      setCassetteBaseImg(base); setCassetteOverlayImg(overlay); setCassetteMaskImg(mask);
     }).catch(err => console.error('Cassette asset load error:', err));
   }, [folderShape]);
 
@@ -690,8 +687,11 @@ export default function App() {
     const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
     const x = (e.clientX - rect.left) * scaleX, y = (e.clientY - rect.top) * scaleY;
     if (labelStyle === 'dymo') {
-      const tapeW = canvas.width * 0.55, tapeH = canvas.height * 0.12;
-      const tX = canvas.width / 2 - tapeW / 2 + tapeOffset.x, tY = canvas.height * 0.55 - tapeH / 2 + tapeOffset.y;
+      // Hit-box aggiornato con tapeScale
+      const tapeW = canvas.width * 0.55 * tapeScale;
+      const tapeH = canvas.height * 0.12 * tapeScale;
+      const tX = canvas.width / 2 - tapeW / 2 + tapeOffset.x;
+      const tY = canvas.height * 0.55 - tapeH / 2 + tapeOffset.y;
       if (label.trim() !== '' && x >= tX && x <= tX + tapeW && y >= tY && y <= tY + tapeH) draggingRef.current = 'tape';
       else if (coverSrc) draggingRef.current = 'cover';
     } else if (labelStyle === 'badge') {
@@ -746,19 +746,14 @@ export default function App() {
     ctx.clearRect(0, 0, w, h);
 
     if (folderShape === 'cassette') {
-      // Tint cassette-base con multiply: rispetta i neri (fori restano scuri)
-      // effectiveTintColor per cassette è solo folderColorOverride esplicito
       if (effectiveTintColor) {
         const offCassette = document.createElement('canvas');
         offCassette.width = w; offCassette.height = h;
         const offCtx = offCassette.getContext('2d');
-        // 1. disegna base
         offCtx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
-        // 2. sovrapponi colore con multiply: nero*qualsiasi = nero, bianco*colore = colore
         offCtx.globalCompositeOperation = 'multiply';
         offCtx.fillStyle = effectiveTintColor;
         offCtx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
-        // 3. ritaglia ai pixel opachi della base (preserva trasparenza)
         offCtx.globalCompositeOperation = 'destination-in';
         offCtx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
         ctx.drawImage(offCassette, 0, 0);
@@ -766,7 +761,6 @@ export default function App() {
         ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
 
-      // Immagine utente mascherata
       if (coverImg) {
         const sX = folderRect.w / CASSETTE_PNG_W;
         const sY = folderRect.h / CASSETTE_PNG_H;
@@ -774,7 +768,6 @@ export default function App() {
         const rectY = folderRect.y + CASSETTE_LABEL_Y * sY;
         const rectW = CASSETTE_LABEL_W * sX;
         const rectH = CASSETTE_LABEL_H * sY;
-
         const imgRatio = coverImg.width / coverImg.height;
         const areaRatio = rectW / rectH;
         let drawW, drawH;
@@ -782,35 +775,26 @@ export default function App() {
         else { drawW = rectW * coverScale; drawH = drawW / imgRatio; }
         const drawX = (rectW - drawW) / 2 + coverOffset.x;
         const drawY = (rectH - drawH) / 2 + coverOffset.y;
-
         const off = document.createElement('canvas');
-        off.width = Math.round(rectW);
-        off.height = Math.round(rectH);
+        off.width = Math.round(rectW); off.height = Math.round(rectH);
         const offCtx = off.getContext('2d');
-        offCtx.imageSmoothingEnabled = true;
-        offCtx.imageSmoothingQuality = 'high';
-
+        offCtx.imageSmoothingEnabled = true; offCtx.imageSmoothingQuality = 'high';
         offCtx.save();
         offCtx.translate(drawX + drawW / 2, drawY + drawH / 2);
         offCtx.rotate((coverRotation * Math.PI) / 180);
         offCtx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
         offCtx.drawImage(coverImg, drawX, drawY, drawW, drawH);
         offCtx.restore();
-
         offCtx.globalCompositeOperation = 'destination-in';
         offCtx.drawImage(cassetteMaskImg, 0, 0, off.width, off.height);
-        offCtx.globalCompositeOperation = 'source-over';
-
         ctx.drawImage(off, rectX, rectY);
       }
 
-      // Overlay
       if (cassetteOverlayImg) {
         ctx.drawImage(cassetteOverlayImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
 
     } else {
-      // Pipeline classic
       if (shape.tintFolder && effectiveTintColor) {
         const offscreen = document.createElement('canvas');
         offscreen.width = w; offscreen.height = h;
@@ -854,13 +838,12 @@ export default function App() {
       }
     }
 
-    // Etichette
     if (label.trim() !== '') {
-      if (labelStyle === 'dymo') drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
+      if (labelStyle === 'dymo') drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily, tapeScale);
       else if (labelStyle === 'banner') drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
       else if (labelStyle === 'badge') drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
     }
-  }, [baseImgData, cassetteBaseImg, cassetteOverlayImg, cassetteMaskImg, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, cassetteBaseImg, cassetteOverlayImg, cassetteMaskImg, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, tapeScale, fontSizeMultiplier, fontFamily]);
 
   const getFileName = () => (label.trim() === '' ? 'icon' : label).replace(/\s+/g, '_').toLowerCase();
 
@@ -904,6 +887,7 @@ export default function App() {
   const setTapeColorWithHistory = (v) => { setTapeColor(v); pushHistory(makeSnapshot({ ...stateRef.current, tapeColor: v })); };
   const setTapeOpacityWithHistory = (v) => { setTapeOpacity(v); pushDebounced('opacity', makeSnapshot({ ...stateRef.current, tapeOpacity: v })); };
   const setTapeRotationWithHistory = (v) => { setTapeRotation(v); pushDebounced('tapeRotation', makeSnapshot({ ...stateRef.current, tapeRotation: v })); };
+  const setTapeScaleWithHistory = (v) => { setTapeScale(v); pushDebounced('tapeScale', makeSnapshot({ ...stateRef.current, tapeScale: v })); };
   const setFontSizeMultiplierWithHistory = (v) => { setFontSizeMultiplier(v); pushDebounced('fontSize', makeSnapshot({ ...stateRef.current, fontSizeMultiplier: v })); };
   const setFontFamilyWithHistory = (v) => { setFontFamily(v); pushHistory(makeSnapshot({ ...stateRef.current, fontFamily: v })); };
   const setBadgeSizeWithHistory = (v) => { setBadgeSize(v); pushDebounced('badgeSize', makeSnapshot({ ...stateRef.current, badgeSize: v })); };
@@ -1040,13 +1024,13 @@ export default function App() {
               </h2>
               <div className="flex gap-2">
                 {['dymo', 'banner', 'badge'].map(style => {
-                  const isBannerDisabled = style === 'banner' && folderShape === 'cassette';
+                  const isDisabled = (style === 'banner' || style === 'badge') && folderShape === 'cassette';
                   return (
                     <button key={style}
-                      onClick={() => !isBannerDisabled && setLabelStyleWithHistory(style)}
-                      disabled={isBannerDisabled}
+                      onClick={() => !isDisabled && setLabelStyleWithHistory(style)}
+                      disabled={isDisabled}
                       className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
-                        isBannerDisabled
+                        isDisabled
                           ? 'border-neutral-800/30 bg-[#09090b]/40 text-neutral-700 cursor-not-allowed'
                           : labelStyle === style
                             ? 'border-blue-500 bg-blue-500/10 text-blue-300'
@@ -1078,6 +1062,8 @@ export default function App() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Dimensione testo */}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-xs text-neutral-400">
                       <span className="flex items-center gap-1"><Type size={13} /> {t.fontSize}</span>
@@ -1087,6 +1073,28 @@ export default function App() {
                       onChange={e => setFontSizeMultiplierWithHistory(parseFloat(e.target.value))}
                       className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   </div>
+
+                  {/* Dimensione nastro (solo Dymo) */}
+                  {labelStyle === 'dymo' && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs text-neutral-400">
+                        <span className="flex items-center gap-1"><Maximize2 size={13} /> {t.tapeSize}</span>
+                        <div className="flex items-center gap-1">
+                          <span>{Math.round(tapeScale * 100)}%</span>
+                          {tapeScale !== 1 && (
+                            <button onClick={() => { setTapeScale(1); pushHistory(makeSnapshot({ ...stateRef.current, tapeScale: 1 })); }}
+                              className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
+                              <RotateCcw size={10} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <input type="range" min="0.4" max="2" step="0.05" value={tapeScale}
+                        onChange={e => setTapeScaleWithHistory(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                    </div>
+                  )}
+
                   {labelStyle === 'dymo' && (
                     <div className="space-y-2">
                       <div className="flex justify-between items-center text-xs text-neutral-400">
