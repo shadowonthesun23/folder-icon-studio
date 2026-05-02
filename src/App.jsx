@@ -120,7 +120,20 @@ const CASSETTE_LABEL_X = 136;
 const CASSETTE_LABEL_Y = 101;
 const CASSETTE_LABEL_W = 1911;
 const CASSETTE_LABEL_H = 928;
-const CASSETTE_LABEL_R = 0; // angoli retti — la sagoma reale non è stondata
+
+// Helper: disegna una pillola (rettangolo con rx = h/2) su ctx
+const pillPath = (ctx, x, y, w, h) => {
+  const r = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + r, r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+};
 
 const FOLDERS = {
   classic: {
@@ -187,9 +200,7 @@ const FOLDERS = {
       const y = rect.y + CASSETTE_LABEL_Y * sY;
       const w = CASSETTE_LABEL_W * sX;
       const h = CASSETTE_LABEL_H * sY;
-      ctx.beginPath();
-      ctx.rect(x, y, w, h);
-      ctx.closePath();
+      pillPath(ctx, x, y, w, h);
     },
   }
 };
@@ -783,7 +794,7 @@ export default function App() {
       // 1. Disegna base cassetta
       ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
 
-      // 2. Disegna immagine utente con clip rettangolare sull'area label
+      // 2. Clip a pillola sull'area label, poi disegna immagine utente
       if (coverImg) {
         const { clipRect } = shape;
         const sX = folderRect.w / clipRect.vw;
@@ -802,9 +813,8 @@ export default function App() {
         const drawY = rectY + (rectH - drawH) / 2 + coverOffset.y;
 
         ctx.save();
-        // Clip rettangolare sull'area label — angoli retti, nessun arcTo
-        ctx.beginPath();
-        ctx.rect(rectX, rectY, rectW, rectH);
+        // Clip a pillola: rx = rectH / 2
+        pillPath(ctx, rectX, rectY, rectW, rectH);
         ctx.clip();
 
         ctx.translate(drawX + drawW / 2, drawY + drawH / 2);
