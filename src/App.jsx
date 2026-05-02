@@ -146,14 +146,18 @@ const FOLDERS = {
     tintFolder: false,
     url: null,
     getFolderRect: (cw, ch) => ({ x: 0, y: 0, w: cw, h: ch }),
+    // PNG reale: 2185 x 1400
+    // Area label (da Photoshop): x≈0, y≈0, w≈1910, h≈922
+    clipRect: { x: 0, y: 0, w: 1910, h: 922, vw: 2185, vh: 1400 },
     buildFlapPath: (ctx, rect) => {
-      const sX = rect.w / 1024;
-      const sY = rect.h / 1024;
-      const wx = rect.x + 180 * sX;
-      const wy = rect.y + 310 * sY;
-      const ww = 664 * sX;
-      const wh = 340 * sY;
-      const wr = 18 * Math.min(sX, sY);
+      // Scala basata sulle dimensioni reali della PNG sorgente
+      const sX = rect.w / 2185;
+      const sY = rect.h / 1400;
+      const wx = rect.x + 0 * sX;
+      const wy = rect.y + 0 * sY;
+      const ww = 1910 * sX;
+      const wh = 922 * sY;
+      const wr = 40 * Math.min(sX, sY);
       ctx.beginPath();
       ctx.moveTo(wx + wr, wy);
       ctx.lineTo(wx + ww - wr, wy);
@@ -165,17 +169,7 @@ const FOLDERS = {
       ctx.lineTo(wx, wy + wr);
       ctx.arcTo(wx, wy, wx + ww, wy, wr);
       ctx.closePath();
-      const r1x = rect.x + 340 * sX;
-      const r1y = rect.y + 480 * sY;
-      const rr = 90 * Math.min(sX, sY);
-      ctx.moveTo(r1x + rr, r1y);
-      ctx.arc(r1x, r1y, rr, 0, Math.PI * 2, true);
-      const r2x = rect.x + 684 * sX;
-      const r2y = rect.y + 480 * sY;
-      ctx.moveTo(r2x + rr, r2y);
-      ctx.arc(r2x, r2y, rr, 0, Math.PI * 2, true);
     },
-    clipRect: { x: 180, y: 310, w: 664, h: 340, vw: 1024, vh: 1024 },
   }
 };
 
@@ -770,7 +764,7 @@ export default function App() {
       if (coverImg) {
         ctx.save();
         shape.buildFlapPath(ctx, folderRect);
-        ctx.clip('evenodd');
+        ctx.clip();
 
         const { clipRect } = shape;
         const rectX = folderRect.x + clipRect.x * (folderRect.w / clipRect.vw);
