@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown, Circle, Undo2, Redo2, BookmarkPlus, Bookmark, Trash2 } from 'lucide-react';
+import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown, Circle, Undo2, Redo2, BookmarkPlus, Bookmark, Trash2, Info } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
 const TRANSLATIONS = {
@@ -41,10 +41,11 @@ const TRANSLATIONS = {
     removeImage: 'Rimuovi immagine',
     undo: 'Annulla',
     redo: 'Ripeti',
-    section3: '3. Preset',
-    savePreset: 'Salva preset',
-    presetNamePlaceholder: 'Nome preset...',
-    noPresets: 'Nessun preset salvato',
+    section3: '3. Stili salvati',
+    section3Hint: 'Salva i parametri grafici (etichetta, colori, font). L\'immagine non viene salvata.',
+    savePreset: 'Salva stile',
+    presetNamePlaceholder: 'Nome stile...',
+    noPresets: 'Nessuno stile salvato',
     applyPreset: 'Applica',
     deletePreset: 'Elimina',
   },
@@ -86,10 +87,11 @@ const TRANSLATIONS = {
     removeImage: 'Remove image',
     undo: 'Undo',
     redo: 'Redo',
-    section3: '3. Presets',
-    savePreset: 'Save preset',
-    presetNamePlaceholder: 'Preset name...',
-    noPresets: 'No saved presets',
+    section3: '3. Saved Styles',
+    section3Hint: 'Saves graphic parameters (label, colors, font). The image is not saved.',
+    savePreset: 'Save style',
+    presetNamePlaceholder: 'Style name...',
+    noPresets: 'No saved styles',
     applyPreset: 'Apply',
     deletePreset: 'Delete',
   }
@@ -410,6 +412,20 @@ const savePresetsToStorage = (presets) => {
 
 const makeSnapshot = (s) => ({ ...s });
 
+// Generate a 48x48 thumbnail dataURL from the current canvas
+const captureThumbnail = (canvas) => {
+  if (!canvas) return null;
+  try {
+    const thumb = document.createElement('canvas');
+    thumb.width = 48; thumb.height = 48;
+    const ctx = thumb.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, 0, 0, 48, 48);
+    return thumb.toDataURL('image/png');
+  } catch { return null; }
+};
+
 export default function App() {
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -450,6 +466,7 @@ export default function App() {
   const [presets, setPresets] = useState(() => loadPresetsFromStorage());
   const [presetName, setPresetName] = useState('');
   const [presetsOpen, setPresetsOpen] = useState(false);
+  const [section3HintVisible, setSection3HintVisible] = useState(false);
 
   // ─── stateRef: always-current snapshot ──────────────────────────────────────
   const stateRef = useRef({
@@ -545,10 +562,12 @@ export default function App() {
   // ─── Preset actions ──────────────────────────────────────────────────────────
 
   const handleSavePreset = () => {
-    const name = presetName.trim() || `Preset ${presets.length + 1}`;
+    const name = presetName.trim() || `Stile ${presets.length + 1}`;
+    const thumbnail = captureThumbnail(canvasRef.current);
     const newPreset = {
       id: Date.now(),
       name,
+      thumbnail,
       ...makeSnapshot(stateRef.current),
     };
     const updated = [...presets, newPreset];
@@ -558,7 +577,7 @@ export default function App() {
   };
 
   const handleApplyPreset = (preset) => {
-    const { id, name, ...snap } = preset;
+    const { id, name, thumbnail, ...snap } = preset;
     applySnapshot(snap);
     pushHistory(makeSnapshot(snap));
   };
@@ -1065,15 +1084,30 @@ export default function App() {
 
             <hr className="border-white/5" />
 
-            {/* ── SECTION 3: Preset ── */}
+            {/* ── SECTION 3: Stili salvati ── */}
             <section className="space-y-4 pb-2">
-              <button
-                onClick={() => setPresetsOpen(o => !o)}
-                className="w-full flex items-center justify-between text-sm font-semibold tracking-wide text-neutral-300 uppercase"
-              >
-                <span className="flex items-center gap-2"><Bookmark size={16} /> {t.section3}</span>
-                <ChevronDown size={15} className={`transition-transform text-neutral-500 ${presetsOpen ? 'rotate-180' : ''}`} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPresetsOpen(o => !o)}
+                  className="flex-1 flex items-center justify-between text-sm font-semibold tracking-wide text-neutral-300 uppercase"
+                >
+                  <span className="flex items-center gap-2"><Bookmark size={16} /> {t.section3}</span>
+                  <ChevronDown size={15} className={`transition-transform text-neutral-500 ${presetsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                <button
+                  onClick={() => setSection3HintVisible(v => !v)}
+                  className="text-neutral-600 hover:text-neutral-400 transition-colors shrink-0"
+                  title={t.section3Hint}
+                >
+                  <Info size={14} />
+                </button>
+              </div>
+
+              {section3HintVisible && (
+                <p className="text-[11px] text-neutral-500 bg-neutral-800/40 border border-neutral-700/40 rounded-lg px-3 py-2 leading-relaxed">
+                  {t.section3Hint}
+                </p>
+              )}
 
               {presetsOpen && (
                 <div className="space-y-3">
@@ -1103,16 +1137,27 @@ export default function App() {
                     <div className="space-y-2">
                       {presets.map(preset => (
                         <div key={preset.id}
-                          className="flex items-center gap-2 bg-[#09090b] border border-neutral-800/60 rounded-xl px-3 py-2.5 group">
-                          {/* Color swatch */}
-                          <div className="w-4 h-4 rounded-full shrink-0 border border-white/10"
-                            style={{ backgroundColor: preset.tapeColor }} />
-                          {/* Name */}
-                          <span className="flex-1 text-xs text-neutral-300 font-mono truncate">{preset.name}</span>
-                          {/* Style pill */}
-                          <span className="text-[10px] text-neutral-600 shrink-0 hidden group-hover:inline">
-                            {preset.labelStyle}
-                          </span>
+                          className="flex items-center gap-2.5 bg-[#09090b] border border-neutral-800/60 rounded-xl px-3 py-2 group hover:border-neutral-700/60 transition-colors">
+                          {/* Thumbnail */}
+                          {preset.thumbnail ? (
+                            <img
+                              src={preset.thumbnail}
+                              alt={preset.name}
+                              className="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/10"
+                            />
+                          ) : (
+                            <div
+                              className="w-10 h-10 rounded-lg shrink-0 border border-white/10 flex items-center justify-center"
+                              style={{ backgroundColor: preset.tapeColor }}
+                            >
+                              <Bookmark size={14} className="text-white/60" />
+                            </div>
+                          )}
+                          {/* Name + style pill */}
+                          <div className="flex-1 min-w-0">
+                            <span className="block text-xs text-neutral-200 font-mono truncate">{preset.name}</span>
+                            <span className="text-[10px] text-neutral-600">{preset.labelStyle}</span>
+                          </div>
                           {/* Actions */}
                           <button
                             onClick={() => handleApplyPreset(preset)}
