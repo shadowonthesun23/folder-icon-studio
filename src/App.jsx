@@ -120,7 +120,7 @@ const CASSETTE_LABEL_X = 136;
 const CASSETTE_LABEL_Y = 101;
 const CASSETTE_LABEL_W = 1911;
 const CASSETTE_LABEL_H = 928;
-const CASSETTE_LABEL_R = 40; // border-radius in px PNG
+const CASSETTE_LABEL_R = 0; // angoli retti — la sagoma reale non è stondata
 
 const FOLDERS = {
   classic: {
@@ -180,6 +180,7 @@ const FOLDERS = {
       vw: CASSETTE_PNG_W,
       vh: CASSETTE_PNG_H,
     },
+    // buildFlapPath usato solo per banner label — NON per clippare l'immagine utente
     buildFlapPath: (ctx, rect) => {
       const sX = rect.w / CASSETTE_PNG_W;
       const sY = rect.h / CASSETTE_PNG_H;
@@ -187,17 +188,9 @@ const FOLDERS = {
       const y = rect.y + CASSETTE_LABEL_Y * sY;
       const w = CASSETTE_LABEL_W * sX;
       const h = CASSETTE_LABEL_H * sY;
-      const r = CASSETTE_LABEL_R * Math.min(sX, sY);
+      // angoli retti: nessun arcTo
       ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.arcTo(x + w, y, x + w, y + h, r);
-      ctx.lineTo(x + w, y + h - r);
-      ctx.arcTo(x + w, y + h, x, y + h, r);
-      ctx.lineTo(x + r, y + h);
-      ctx.arcTo(x, y + h, x, y, r);
-      ctx.lineTo(x, y + r);
-      ctx.arcTo(x, y, x + w, y, r);
+      ctx.rect(x, y, w, h);
       ctx.closePath();
     },
   }
@@ -789,13 +782,12 @@ export default function App() {
     ctx.clearRect(0, 0, w, h);
 
     if (folderShape === 'cassette') {
+      // 1. Disegna base cassetta
       ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
 
+      // 2. Disegna immagine utente SENZA clip geometrico:
+      //    l'overlay PNG coprirà ingranaggi, nastro e bordi naturalmente
       if (coverImg) {
-        ctx.save();
-        shape.buildFlapPath(ctx, folderRect);
-        ctx.clip();
-
         const { clipRect } = shape;
         const rectX = folderRect.x + clipRect.x * (folderRect.w / clipRect.vw);
         const rectY = folderRect.y + clipRect.y * (folderRect.h / clipRect.vh);
@@ -814,9 +806,9 @@ export default function App() {
         ctx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
         ctx.drawImage(coverImg, drawX, drawY, drawW, drawH);
         ctx.restore();
-        ctx.restore();
       }
 
+      // 3. Overlay PNG sopra tutto: copre cornice, ingranaggi, nastro e bordi
       if (cassetteOverlayImg) {
         ctx.drawImage(cassetteOverlayImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
