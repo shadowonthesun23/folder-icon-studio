@@ -291,7 +291,7 @@ export default function App() {
   const coverImgRef = useRef(null);
   const [baseImgData, setBaseImgData] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
-  const [coverImgReady, setCoverImgReady] = useState(false);
+  const [coverImgTick, setCoverImgTick] = useState(0);
   const [label, setLabel] = useState('Archivio 01');
   const [labelStyle, setLabelStyle] = useState('dymo');
   const [tapeColor, setTapeColor] = useState('#f4ebd0');
@@ -359,13 +359,13 @@ export default function App() {
   useEffect(() => {
     if (!coverSrc) {
       coverImgRef.current = null;
-      setCoverImgReady(false);
+      setCoverImgTick(0);
       return;
     }
     const img = new Image();
     img.onload = () => {
       coverImgRef.current = img;
-      setCoverImgReady(true);
+      setCoverImgTick(t => t + 1);
     };
     img.src = coverSrc;
   }, [coverSrc]);
@@ -454,9 +454,7 @@ export default function App() {
       const shape = FOLDERS[folderShape];
       const folderRect = shape.getFolderRect(w, h);
 
-      // --- Disegno cartella con tinting su canvas offscreen ---
       if (shape.tintFolder && effectiveTintColor) {
-        // Canvas offscreen: applica tint senza toccare il canvas principale
         const offscreen = document.createElement('canvas');
         offscreen.width = w;
         offscreen.height = h;
@@ -467,13 +465,11 @@ export default function App() {
         offCtx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
         offCtx.globalCompositeOperation = 'destination-in';
         offCtx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
-        // Ora composita il risultato sul canvas principale senza side effects
         ctx.drawImage(offscreen, 0, 0);
       } else {
         ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
 
-      // --- Cover image ---
       const coverImg = coverImgRef.current;
       if (coverSrc && coverImg) {
         ctx.save();
@@ -521,7 +517,7 @@ export default function App() {
     };
 
     render();
-  }, [baseImgData, coverSrc, coverImgReady, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, coverSrc, coverImgTick, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -611,7 +607,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Colore cartella */}
             <div className="space-y-2">
               <label className="text-xs text-neutral-500 flex items-center gap-1">
                 <Palette size={13} /> {t.folderColor}
@@ -761,7 +756,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Colore nastro/banner */}
                 <div className="space-y-2 pt-2">
                   <label className="text-xs text-neutral-500 flex items-center gap-1">
                     <Palette size={14} /> {labelStyle === 'banner' ? t.colorBanner : t.colorTape}
