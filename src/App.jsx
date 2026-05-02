@@ -291,6 +291,7 @@ export default function App() {
   const coverImgRef = useRef(null);
   const [baseImgData, setBaseImgData] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
+  const [coverImgReady, setCoverImgReady] = useState(false);
   const [label, setLabel] = useState('Archivio 01');
   const [labelStyle, setLabelStyle] = useState('dymo');
   const [tapeColor, setTapeColor] = useState('#f4ebd0');
@@ -356,9 +357,16 @@ export default function App() {
   }, [folderShape]);
 
   useEffect(() => {
-    if (!coverSrc) { coverImgRef.current = null; return; }
+    if (!coverSrc) {
+      coverImgRef.current = null;
+      setCoverImgReady(false);
+      return;
+    }
     const img = new Image();
-    img.onload = () => { coverImgRef.current = img; };
+    img.onload = () => {
+      coverImgRef.current = img;
+      setCoverImgReady(true);
+    };
     img.src = coverSrc;
   }, [coverSrc]);
 
@@ -513,7 +521,7 @@ export default function App() {
     };
 
     render();
-  }, [baseImgData, coverSrc, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, coverSrc, coverImgReady, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
