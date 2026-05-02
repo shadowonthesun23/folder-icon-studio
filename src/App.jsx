@@ -288,10 +288,9 @@ const IconInstagram = ({ size = 16, className = '' }) => (
 
 export default function App() {
   const canvasRef = useRef(null);
-  const coverImgRef = useRef(null);
   const [baseImgData, setBaseImgData] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
-  const [coverImgTick, setCoverImgTick] = useState(0);
+  const [coverImg, setCoverImg] = useState(null);
   const [label, setLabel] = useState('Archivio 01');
   const [labelStyle, setLabelStyle] = useState('dymo');
   const [tapeColor, setTapeColor] = useState('#f4ebd0');
@@ -325,6 +324,7 @@ export default function App() {
 
   const handleClearImage = () => {
     setCoverSrc(null);
+    setCoverImg(null);
     setCoverOffset({ x: 0, y: 0 });
     setCoverScale(1);
     setCoverRotation(0);
@@ -358,15 +358,12 @@ export default function App() {
 
   useEffect(() => {
     if (!coverSrc) {
-      coverImgRef.current = null;
-      setCoverImgTick(0);
+      setCoverImg(null);
       return;
     }
+    setCoverImg(null);
     const img = new Image();
-    img.onload = () => {
-      coverImgRef.current = img;
-      setCoverImgTick(t => t + 1);
-    };
+    img.onload = () => setCoverImg(img);
     img.src = coverSrc;
   }, [coverSrc]);
 
@@ -470,8 +467,7 @@ export default function App() {
         ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
 
-      const coverImg = coverImgRef.current;
-      if (coverSrc && coverImg) {
+      if (coverImg) {
         ctx.save();
         shape.buildFlapPath(ctx, folderRect);
         ctx.clip();
@@ -517,7 +513,7 @@ export default function App() {
     };
 
     render();
-  }, [baseImgData, coverSrc, coverImgTick, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
