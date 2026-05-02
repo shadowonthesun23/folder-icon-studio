@@ -184,11 +184,38 @@ const loadSvgAsImage = (svgString) => new Promise((resolve, reject) => {
 
 // ─── Export helpers ──────────────────────────────────────────────────────────
 
+/**
+ * Progressive downsampling: dimezza iterativamente finché non si raggiunge
+ * la dimensione target. Produce risultati nettamente migliori rispetto a un
+ * singolo drawImage su scale drastiche (es. 1024→16).
+ */
 const resizeCanvas = (source, size) => {
-  const c = document.createElement('canvas');
-  c.width = size; c.height = size;
-  c.getContext('2d').drawImage(source, 0, 0, size, size);
-  return c;
+  let current = source;
+  let currentSize = source.width;
+
+  // Dimezza finché non siamo entro 2x della dimensione target
+  while (currentSize > size * 2) {
+    const half = Math.max(Math.floor(currentSize / 2), size);
+    const tmp = document.createElement('canvas');
+    tmp.width = half;
+    tmp.height = half;
+    const ctx = tmp.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(current, 0, 0, half, half);
+    current = tmp;
+    currentSize = half;
+  }
+
+  // Step finale alla dimensione esatta
+  const out = document.createElement('canvas');
+  out.width = size;
+  out.height = size;
+  const ctx = out.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(current, 0, 0, size, size);
+  return out;
 };
 
 const canvasToPngBlob = (source, size) => new Promise((resolve) => {
