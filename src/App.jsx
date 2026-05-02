@@ -115,12 +115,11 @@ const FOLDER_COLORS = [
 const CASSETTE_PNG_W = 2185;
 const CASSETTE_PNG_H = 1400;
 
-// Area label in coordinate PNG assolute (misurate in Photoshop)
-// x=137, y=42, w=1910, h=922
-const CASSETTE_LABEL_X = 137;
-const CASSETTE_LABEL_Y = 42;
-const CASSETTE_LABEL_W = 1910;
-const CASSETTE_LABEL_H = 922;
+// Area label in coordinate PNG assolute (misurate in Photoshop con origine default)
+const CASSETTE_LABEL_X = 136;
+const CASSETTE_LABEL_Y = 101;
+const CASSETTE_LABEL_W = 1911;
+const CASSETTE_LABEL_H = 928;
 const CASSETTE_LABEL_R = 40; // border-radius in px PNG
 
 const FOLDERS = {
@@ -157,19 +156,15 @@ const FOLDERS = {
     name: 'Cassetta',
     tintFolder: false,
     url: null,
-    // getFolderRect calcola posizione e dimensioni per disegnare la PNG
-    // nel canvas 1024x1024 mantenendo le proporzioni 2185:1400
     getFolderRect: (cw, ch) => {
-      const pngRatio = CASSETTE_PNG_W / CASSETTE_PNG_H; // ~1.5607
+      const pngRatio = CASSETTE_PNG_W / CASSETTE_PNG_H;
       let w, h, x, y;
       if (cw / ch > pngRatio) {
-        // canvas più largo: fit per altezza
         h = ch;
         w = h * pngRatio;
         x = (cw - w) / 2;
         y = 0;
       } else {
-        // canvas più alto: fit per larghezza
         w = cw;
         h = w / pngRatio;
         x = 0;
@@ -177,7 +172,6 @@ const FOLDERS = {
       }
       return { x, y, w, h };
     },
-    // clipRect in coordinate PNG assolute — usato solo da drawBanner
     clipRect: {
       x: CASSETTE_LABEL_X,
       y: CASSETTE_LABEL_Y,
@@ -187,8 +181,6 @@ const FOLDERS = {
       vh: CASSETTE_PNG_H,
     },
     buildFlapPath: (ctx, rect) => {
-      // rect = { x, y, w, h } = posizione cassetta nel canvas
-      // scala da PNG a canvas
       const sX = rect.w / CASSETTE_PNG_W;
       const sY = rect.h / CASSETTE_PNG_H;
       const x = rect.x + CASSETTE_LABEL_X * sX;
