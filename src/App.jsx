@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown, Circle } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown, Circle, Undo2, Redo2 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
 const TRANSLATIONS = {
@@ -39,6 +39,8 @@ const TRANSLATIONS = {
     customColor: 'Colore personalizzato',
     coverRotation: 'Rotazione',
     removeImage: 'Rimuovi immagine',
+    undo: 'Annulla',
+    redo: 'Ripeti',
   },
   en: {
     subtitle: 'Create custom macOS icons.',
@@ -76,6 +78,8 @@ const TRANSLATIONS = {
     customColor: 'Custom color',
     coverRotation: 'Rotation',
     removeImage: 'Remove image',
+    undo: 'Undo',
+    redo: 'Redo',
   }
 };
 
@@ -169,6 +173,8 @@ const FONT_OPTIONS = [
   { id: 'playfair', family: 'Playfair Display', label: 'Serif' },
 ];
 
+const HISTORY_CAP = 50;
+
 const rgbToHex = (r, g, b) => '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
 
 const getTapeTextColor = (hex) => {
@@ -193,23 +199,18 @@ const loadSvgAsImage = (svgString) => new Promise((resolve, reject) => {
 const resizeCanvas = (source, size) => {
   let current = source;
   let currentSize = source.width;
-
   while (currentSize > size * 2) {
     const half = Math.max(Math.floor(currentSize / 2), size);
     const tmp = document.createElement('canvas');
-    tmp.width = half;
-    tmp.height = half;
+    tmp.width = half; tmp.height = half;
     const ctx = tmp.getContext('2d');
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(current, 0, 0, half, half);
-    current = tmp;
-    currentSize = half;
+    current = tmp; currentSize = half;
   }
-
   const out = document.createElement('canvas');
-  out.width = size;
-  out.height = size;
+  out.width = size; out.height = size;
   const ctx = out.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -223,38 +224,25 @@ const canvasToPngBlob = (source, size) => new Promise((resolve) => {
 
 const buildIcns = async (canvas) => {
   const CHUNKS = [
-    { ostype: 'icp4', size: 16 },
-    { ostype: 'icp5', size: 32 },
-    { ostype: 'icp6', size: 64 },
-    { ostype: 'ic07', size: 128 },
-    { ostype: 'ic08', size: 256 },
-    { ostype: 'ic09', size: 512 },
-    { ostype: 'ic10', size: 1024 },
-    { ostype: 'ic11', size: 32 },
-    { ostype: 'ic12', size: 64 },
-    { ostype: 'ic13', size: 256 },
-    { ostype: 'ic14', size: 512 },
+    { ostype: 'icp4', size: 16 }, { ostype: 'icp5', size: 32 }, { ostype: 'icp6', size: 64 },
+    { ostype: 'ic07', size: 128 }, { ostype: 'ic08', size: 256 }, { ostype: 'ic09', size: 512 },
+    { ostype: 'ic10', size: 1024 }, { ostype: 'ic11', size: 32 }, { ostype: 'ic12', size: 64 },
+    { ostype: 'ic13', size: 256 }, { ostype: 'ic14', size: 512 },
   ];
   const pngCache = {};
   const getPng = async (size) => {
-    if (!pngCache[size]) {
-      const blob = await canvasToPngBlob(canvas, size);
-      pngCache[size] = new Uint8Array(await blob.arrayBuffer());
-    }
+    if (!pngCache[size]) { const blob = await canvasToPngBlob(canvas, size); pngCache[size] = new Uint8Array(await blob.arrayBuffer()); }
     return pngCache[size];
   };
-  const chunkBuffers = await Promise.all(
-    CHUNKS.map(async ({ ostype, size }) => {
-      const pngData = await getPng(size);
-      const chunkLen = 8 + pngData.length;
-      const buf = new Uint8Array(chunkLen);
-      for (let i = 0; i < 4; i++) buf[i] = ostype.charCodeAt(i);
-      const dv = new DataView(buf.buffer);
-      dv.setUint32(4, chunkLen, false);
-      buf.set(pngData, 8);
-      return buf;
-    })
-  );
+  const chunkBuffers = await Promise.all(CHUNKS.map(async ({ ostype, size }) => {
+    const pngData = await getPng(size);
+    const chunkLen = 8 + pngData.length;
+    const buf = new Uint8Array(chunkLen);
+    for (let i = 0; i < 4; i++) buf[i] = ostype.charCodeAt(i);
+    new DataView(buf.buffer).setUint32(4, chunkLen, false);
+    buf.set(pngData, 8);
+    return buf;
+  }));
   const totalDataLen = chunkBuffers.reduce((s, b) => s + b.length, 0);
   const icnsLen = 8 + totalDataLen;
   const icns = new Uint8Array(icnsLen);
@@ -270,30 +258,20 @@ const buildIco = async (canvas) => {
   const SIZES = [16, 32, 48, 64, 128, 256];
   const pngBlobs = await Promise.all(SIZES.map(s => canvasToPngBlob(canvas, s)));
   const pngBuffers = await Promise.all(pngBlobs.map(b => b.arrayBuffer().then(ab => new Uint8Array(ab))));
-  const headerSize = 6;
-  const dirEntrySize = 16;
+  const headerSize = 6, dirEntrySize = 16;
   const dirSize = dirEntrySize * SIZES.length;
   const totalSize = headerSize + dirSize + pngBuffers.reduce((s, b) => s + b.length, 0);
   const buf = new ArrayBuffer(totalSize);
-  const dv = new DataView(buf);
-  const u8 = new Uint8Array(buf);
-  dv.setUint16(0, 0, true);
-  dv.setUint16(2, 1, true);
-  dv.setUint16(4, SIZES.length, true);
+  const dv = new DataView(buf); const u8 = new Uint8Array(buf);
+  dv.setUint16(0, 0, true); dv.setUint16(2, 1, true); dv.setUint16(4, SIZES.length, true);
   let dataOffset = headerSize + dirSize;
   SIZES.forEach((size, i) => {
-    const png = pngBuffers[i];
-    const entryBase = headerSize + i * dirEntrySize;
-    u8[entryBase + 0] = size === 256 ? 0 : size;
-    u8[entryBase + 1] = size === 256 ? 0 : size;
-    u8[entryBase + 2] = 0;
-    u8[entryBase + 3] = 0;
-    dv.setUint16(entryBase + 4, 1, true);
-    dv.setUint16(entryBase + 6, 32, true);
-    dv.setUint32(entryBase + 8, png.length, true);
-    dv.setUint32(entryBase + 12, dataOffset, true);
-    u8.set(png, dataOffset);
-    dataOffset += png.length;
+    const png = pngBuffers[i]; const entryBase = headerSize + i * dirEntrySize;
+    u8[entryBase] = size === 256 ? 0 : size; u8[entryBase + 1] = size === 256 ? 0 : size;
+    u8[entryBase + 2] = 0; u8[entryBase + 3] = 0;
+    dv.setUint16(entryBase + 4, 1, true); dv.setUint16(entryBase + 6, 32, true);
+    dv.setUint32(entryBase + 8, png.length, true); dv.setUint32(entryBase + 12, dataOffset, true);
+    u8.set(png, dataOffset); dataOffset += png.length;
   });
   return new Blob([buf], { type: 'image/x-icon' });
 };
@@ -301,67 +279,46 @@ const buildIco = async (canvas) => {
 // ─── Canvas drawing helpers ──────────────────────────────────────────────────
 
 const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, tapeRotationDeg, fontSizeMultiplier, fontFamily) => {
-  const tapeW = w * 0.55;
-  const tapeH = h * 0.12;
-  const tapeBaseX = w / 2 - tapeW / 2;
-  const tapeBaseY = h * 0.55 - tapeH / 2;
-  const x = tapeBaseX + tapeOffsetX;
-  const y = tapeBaseY + tapeOffsetY;
+  const tapeW = w * 0.55, tapeH = h * 0.12;
+  const tapeBaseX = w / 2 - tapeW / 2, tapeBaseY = h * 0.55 - tapeH / 2;
+  const x = tapeBaseX + tapeOffsetX, y = tapeBaseY + tapeOffsetY;
   ctx.save();
   ctx.translate(x + tapeW / 2, y + tapeH / 2);
   ctx.rotate((tapeRotationDeg * Math.PI) / 180);
   ctx.translate(-(x + tapeW / 2), -(y + tapeH / 2));
-  ctx.shadowColor = 'rgba(0,0,0,0.3)';
-  ctx.shadowBlur = 15;
-  ctx.shadowOffsetY = 5;
+  ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 5;
   ctx.fillStyle = tapeHex;
   ctx.beginPath();
-  const zigs = 14;
-  const zigH = tapeH / zigs;
+  const zigs = 14, zigH = tapeH / zigs;
   ctx.moveTo(x, y);
   for (let i = 1; i <= zigs; i++) ctx.lineTo(x + (i % 2 === 0 ? 0 : 8), y + i * zigH);
   ctx.lineTo(x + tapeW, y + tapeH);
   for (let i = zigs - 1; i >= 0; i--) ctx.lineTo(x + tapeW - (i % 2 === 0 ? 0 : 8), y + i * zigH);
-  ctx.lineTo(x, y);
-  ctx.closePath();
-  ctx.globalAlpha = opacity;
-  ctx.fill();
-  ctx.globalAlpha = 1;
+  ctx.lineTo(x, y); ctx.closePath();
+  ctx.globalAlpha = opacity; ctx.fill(); ctx.globalAlpha = 1;
   ctx.shadowColor = 'transparent';
   ctx.fillStyle = getTapeTextColor(tapeHex);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   let fontSize = tapeH * 0.55 * fontSizeMultiplier;
   ctx.font = `bold ${fontSize}px "${fontFamily}", sans-serif`;
-  while (ctx.measureText(text).width > tapeW * 0.85 && fontSize > 10) {
-    fontSize -= 2;
-    ctx.font = `bold ${fontSize}px "${fontFamily}", sans-serif`;
-  }
+  while (ctx.measureText(text).width > tapeW * 0.85 && fontSize > 10) { fontSize -= 2; ctx.font = `bold ${fontSize}px "${fontFamily}", sans-serif`; }
   ctx.fillText(text, x + tapeW / 2, y + tapeH / 2);
   ctx.restore();
 };
 
 const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontSizeMultiplier, fontFamily) => {
   const { clipRect } = shape;
-  const scaleX = folderRect.w / clipRect.vw;
-  const scaleY = folderRect.h / clipRect.vh;
-  const rectX = folderRect.x + clipRect.x * scaleX;
-  const rectY = folderRect.y + clipRect.y * scaleY;
-  const rectW = clipRect.w * scaleX;
-  const rectH = clipRect.h * scaleY;
-  const bannerH = rectH * 0.30;
-  const bannerY = rectY + rectH - bannerH;
+  const scaleX = folderRect.w / clipRect.vw, scaleY = folderRect.h / clipRect.vh;
+  const rectX = folderRect.x + clipRect.x * scaleX, rectY = folderRect.y + clipRect.y * scaleY;
+  const rectW = clipRect.w * scaleX, rectH = clipRect.h * scaleY;
+  const bannerH = rectH * 0.30, bannerY = rectY + rectH - bannerH;
   ctx.save();
-  shape.buildFlapPath(ctx, folderRect);
-  ctx.clip();
-  ctx.globalAlpha = opacity;
-  ctx.fillStyle = tapeHex;
+  shape.buildFlapPath(ctx, folderRect); ctx.clip();
+  ctx.globalAlpha = opacity; ctx.fillStyle = tapeHex;
   ctx.fillRect(rectX, bannerY, rectW, bannerH);
   ctx.globalAlpha = 1;
-  const textColor = getTapeTextColor(tapeHex);
-  ctx.fillStyle = textColor;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.fillStyle = getTapeTextColor(tapeHex);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const words = text.split(' ');
   let lines = [text];
   let baseFontSize = bannerH * 0.28 * fontSizeMultiplier;
@@ -370,95 +327,50 @@ const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontSizeMult
     const mid = Math.ceil(words.length / 2);
     lines = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
   }
-  const lineCount = lines.length;
   lines.forEach((line, i) => {
     let fs = baseFontSize;
     ctx.font = `bold ${fs}px "${fontFamily}", sans-serif`;
-    while (ctx.measureText(line).width > rectW * 0.88 && fs > 10) {
-      fs -= 2;
-      ctx.font = `bold ${fs}px "${fontFamily}", sans-serif`;
-    }
-    const lineY = bannerY + bannerH * ((i + 1) / (lineCount + 1));
-    ctx.fillText(line, rectX + rectW / 2, lineY);
+    while (ctx.measureText(line).width > rectW * 0.88 && fs > 10) { fs -= 2; ctx.font = `bold ${fs}px "${fontFamily}", sans-serif`; }
+    ctx.fillText(line, rectX + rectW / 2, bannerY + bannerH * ((i + 1) / (lines.length + 1)));
   });
   ctx.restore();
 };
 
 const drawBadge = (ctx, w, h, text, badgeHex, opacity, badgeOffsetX, badgeOffsetY, radius, fontSizeMultiplier, fontFamily) => {
-  const cx = w / 2 + badgeOffsetX;
-  const cy = h * 0.72 + badgeOffsetY;
-
+  const cx = w / 2 + badgeOffsetX, cy = h * 0.72 + badgeOffsetY;
   ctx.save();
-
-  // Ombra direzionale — luce dall'alto-sinistra
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur = 18;
-  ctx.shadowOffsetX = 3;
-  ctx.shadowOffsetY = 6;
-
-  ctx.globalAlpha = opacity;
-  ctx.fillStyle = badgeHex;
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.closePath();
-  ctx.fill();
-
-  // Reset shadow prima del testo per non duplicarlo
-  ctx.shadowColor = 'transparent';
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 0;
-  ctx.globalAlpha = 1;
-
-  // Highlight interno — sottile arco chiaro in alto per simulare convessità
+  ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 18; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 6;
+  ctx.globalAlpha = opacity; ctx.fillStyle = badgeHex;
+  ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.closePath(); ctx.fill();
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0; ctx.globalAlpha = 1;
   const highlight = ctx.createRadialGradient(cx - radius * 0.2, cy - radius * 0.3, radius * 0.1, cx, cy, radius);
-  highlight.addColorStop(0, 'rgba(255,255,255,0.18)');
-  highlight.addColorStop(0.5, 'rgba(255,255,255,0.04)');
-  highlight.addColorStop(1, 'rgba(0,0,0,0.0)');
-  ctx.globalAlpha = opacity;
-  ctx.fillStyle = highlight;
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // Testo — split automatico su 2 righe
-  const textColor = getTapeTextColor(badgeHex);
-  ctx.fillStyle = textColor;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
+  highlight.addColorStop(0, 'rgba(255,255,255,0.18)'); highlight.addColorStop(0.5, 'rgba(255,255,255,0.04)'); highlight.addColorStop(1, 'rgba(0,0,0,0.0)');
+  ctx.globalAlpha = opacity; ctx.fillStyle = highlight;
+  ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.fillStyle = getTapeTextColor(badgeHex);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const words = text.trim().split(' ');
   let lines = [text];
   let baseFontSize = radius * 0.38 * fontSizeMultiplier;
   const maxWidth = radius * 1.5;
-
   ctx.font = `bold ${baseFontSize}px "${fontFamily}", sans-serif`;
   if (words.length > 1 && ctx.measureText(text).width > maxWidth) {
     const mid = Math.ceil(words.length / 2);
     lines = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
   }
-
   lines.forEach((line, i) => {
     let fs = baseFontSize;
     ctx.font = `bold ${fs}px "${fontFamily}", sans-serif`;
-    while (ctx.measureText(line).width > maxWidth && fs > 8) {
-      fs -= 2;
-      ctx.font = `bold ${fs}px "${fontFamily}", sans-serif`;
-    }
-    const lineH = fs * 1.2;
-    const totalH = lineH * lines.length;
-    const lineY = cy - totalH / 2 + lineH * i + lineH / 2;
-    ctx.fillText(line, cx, lineY);
+    while (ctx.measureText(line).width > maxWidth && fs > 8) { fs -= 2; ctx.font = `bold ${fs}px "${fontFamily}", sans-serif`; }
+    const lineH = fs * 1.2, totalH = lineH * lines.length;
+    ctx.fillText(line, cx, cy - totalH / 2 + lineH * i + lineH / 2);
   });
-
   ctx.restore();
 };
 
 const IconX = ({ size = 16, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M4 4l11.733 16h4.267L8.267 4z" />
-    <path d="M4 20l6.768-6.768m2.46-2.46L20 4" />
+    <path d="M4 4l11.733 16h4.267L8.267 4z" /><path d="M4 20l6.768-6.768m2.46-2.46L20 4" />
   </svg>
 );
 
@@ -469,6 +381,10 @@ const IconInstagram = ({ size = 16, className = '' }) => (
     <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
   </svg>
 );
+
+// ─── History helpers (outside component, pure functions) ──────────────────────────
+
+const makeSnapshot = (s) => ({ ...s });
 
 export default function App() {
   const canvasRef = useRef(null);
@@ -496,10 +412,15 @@ export default function App() {
   const [badgeSize, setBadgeSize] = useState(160);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [historyIndex, setHistoryIndex] = useState(0);
   const draggingRef = useRef(null);
   const dragStartPosRef = useRef({ x: 0, y: 0 });
   const folderColorInputRef = useRef(null);
   const tapeColorInputRef = useRef(null);
+  const historyRef = useRef([]);
+  const historyIndexRef = useRef(0);
+  const sliderDebounceRef = useRef({});
+  const isRestoringRef = useRef(false);
   const [lang, setLang] = useState(() => {
     try { return localStorage.getItem('fis_lang') || 'it'; } catch { return 'it'; }
   });
@@ -507,17 +428,122 @@ export default function App() {
   const t = TRANSLATIONS[lang];
   const effectiveTintColor = folderColorOverride ?? dominantColor ?? null;
 
-  const switchLang = (l) => {
-    setLang(l);
-    try { localStorage.setItem('fis_lang', l); } catch {}
-  };
+  // ─── History core ──────────────────────────────────────────────────────────
+
+  const getSnapshot = useCallback(() => makeSnapshot({
+    label, labelStyle, tapeColor, tapeOpacity, tapeRotation,
+    fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize,
+    coverOffset, coverScale, coverRotation, folderColorOverride,
+  }), [label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride]);
+
+  const applySnapshot = useCallback((snap) => {
+    isRestoringRef.current = true;
+    setLabel(snap.label);
+    setLabelStyle(snap.labelStyle);
+    setTapeColor(snap.tapeColor);
+    setTapeOpacity(snap.tapeOpacity);
+    setTapeRotation(snap.tapeRotation);
+    setFontSizeMultiplier(snap.fontSizeMultiplier);
+    setFontFamily(snap.fontFamily);
+    setTapeOffset(snap.tapeOffset);
+    setBadgeOffset(snap.badgeOffset);
+    setBadgeSize(snap.badgeSize);
+    setCoverOffset(snap.coverOffset);
+    setCoverScale(snap.coverScale);
+    setCoverRotation(snap.coverRotation);
+    setFolderColorOverride(snap.folderColorOverride);
+    // reset flag after all setters flush
+    setTimeout(() => { isRestoringRef.current = false; }, 0);
+  }, []);
+
+  const pushHistory = useCallback((snap) => {
+    if (isRestoringRef.current) return;
+    const stack = historyRef.current;
+    const idx = historyIndexRef.current;
+    // truncate future
+    const newStack = stack.slice(0, idx + 1);
+    newStack.push(snap);
+    if (newStack.length > HISTORY_CAP) newStack.shift();
+    historyRef.current = newStack;
+    historyIndexRef.current = newStack.length - 1;
+    setHistoryIndex(newStack.length - 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    const idx = historyIndexRef.current;
+    if (idx <= 0) return;
+    const newIdx = idx - 1;
+    historyIndexRef.current = newIdx;
+    setHistoryIndex(newIdx);
+    applySnapshot(historyRef.current[newIdx]);
+  }, [applySnapshot]);
+
+  const redo = useCallback(() => {
+    const idx = historyIndexRef.current;
+    const stack = historyRef.current;
+    if (idx >= stack.length - 1) return;
+    const newIdx = idx + 1;
+    historyIndexRef.current = newIdx;
+    setHistoryIndex(newIdx);
+    applySnapshot(stack[newIdx]);
+  }, [applySnapshot]);
+
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < historyRef.current.length - 1;
+
+  // Seed initial snapshot once
+  useEffect(() => {
+    if (historyRef.current.length === 0) {
+      const snap = makeSnapshot({
+        label: 'Archivio 01', labelStyle: 'dymo', tapeColor: '#f4ebd0', tapeOpacity: 1,
+        tapeRotation: -2.3, fontSizeMultiplier: 1, fontFamily: 'Space Mono',
+        tapeOffset: { x: 0, y: 0 }, badgeOffset: { x: 0, y: 0 }, badgeSize: 160,
+        coverOffset: { x: 0, y: 0 }, coverScale: 1, coverRotation: 0, folderColorOverride: null,
+      });
+      historyRef.current = [snap];
+      historyIndexRef.current = 0;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─── Push history helpers for immediate actions (not sliders) ────────────────────
+
+  const pushNow = useCallback(() => {
+    // We can't call getSnapshot here because state hasn't settled yet.
+    // Instead we schedule a microtask to read the latest ref-based snapshot.
+    // Since React batches setState, we use setTimeout 0 to read post-flush values.
+    // Caller must pass the snapshot directly.
+  }, []);
+
+  // Debounced push for sliders — each slider has its own key
+  const pushDebounced = useCallback((key, snap) => {
+    if (sliderDebounceRef.current[key]) clearTimeout(sliderDebounceRef.current[key]);
+    sliderDebounceRef.current[key] = setTimeout(() => {
+      pushHistory(snap);
+    }, 600);
+  }, [pushHistory]);
+
+  // ─── Keyboard shortcuts ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const handler = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo]);
+
+  // ──────────────────────────────────────────────────────────────
+
+  const switchLang = (l) => { setLang(l); try { localStorage.setItem('fis_lang', l); } catch {} };
 
   useEffect(() => {
     if (!downloadMenuOpen) return;
     const handler = (e) => {
-      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) {
-        setDownloadMenuOpen(false);
-      }
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) setDownloadMenuOpen(false);
     };
     document.addEventListener('pointerdown', handler);
     return () => document.removeEventListener('pointerdown', handler);
@@ -525,20 +551,14 @@ export default function App() {
 
   const handleClearImage = () => {
     if (coverSrc && coverSrc.startsWith('blob:')) URL.revokeObjectURL(coverSrc);
-    setCoverSrc(null);
-    setCoverImg(null);
-    setCoverOffset({ x: 0, y: 0 });
-    setCoverScale(1);
-    setCoverRotation(0);
-    setDominantColor(null);
+    setCoverSrc(null); setCoverImg(null);
+    setCoverOffset({ x: 0, y: 0 }); setCoverScale(1); setCoverRotation(0); setDominantColor(null);
   };
 
   const updateCursor = (isDragging) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (isDragging) canvas.style.cursor = 'grabbing';
-    else if (coverSrc) canvas.style.cursor = 'grab';
-    else canvas.style.cursor = 'default';
+    canvas.style.cursor = isDragging ? 'grabbing' : coverSrc ? 'grab' : 'default';
   };
 
   useEffect(() => { updateCursor(false); }, [coverSrc]);
@@ -553,9 +573,7 @@ export default function App() {
   useEffect(() => {
     const shape = FOLDERS[folderShape];
     setBaseImgData(null);
-    loadSvgAsImage(shape.svg)
-      .then(img => setBaseImgData(img))
-      .catch(err => console.error('Folder load error:', err));
+    loadSvgAsImage(shape.svg).then(img => setBaseImgData(img)).catch(err => console.error('Folder load error:', err));
   }, [folderShape]);
 
   useEffect(() => {
@@ -571,19 +589,13 @@ export default function App() {
     if (!file) return;
     if (coverSrc && coverSrc.startsWith('blob:')) URL.revokeObjectURL(coverSrc);
     const objectUrl = URL.createObjectURL(file);
-    setCoverSrc(objectUrl);
-    setCoverOffset({ x: 0, y: 0 });
-    setCoverScale(1);
-    setCoverRotation(0);
+    setCoverSrc(objectUrl); setCoverOffset({ x: 0, y: 0 }); setCoverScale(1); setCoverRotation(0);
     const img = new Image();
     img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = 64; c.height = 64;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(img, 0, 0, 64, 64);
+      const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+      const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, 64, 64);
       const data = ctx.getImageData(0, 0, 64, 64).data;
-      let r = 0, g = 0, b = 0;
-      const n = data.length / 4;
+      let r = 0, g = 0, b = 0; const n = data.length / 4;
       for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i+1]; b += data[i+2]; }
       setDominantColor(rgbToHex(Math.round(r/n), Math.round(g/n), Math.round(b/n)));
     };
@@ -595,34 +607,21 @@ export default function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX, y = (e.clientY - rect.top) * scaleY;
     if (labelStyle === 'dymo') {
-      const tapeW = canvas.width * 0.55;
-      const tapeH = canvas.height * 0.12;
-      const tX = canvas.width / 2 - tapeW / 2 + tapeOffset.x;
-      const tY = canvas.height * 0.55 - tapeH / 2 + tapeOffset.y;
-      if (label.trim() !== '' && x >= tX && x <= tX + tapeW && y >= tY && y <= tY + tapeH) {
-        draggingRef.current = 'tape';
-      } else if (coverSrc) {
-        draggingRef.current = 'cover';
-      }
+      const tapeW = canvas.width * 0.55, tapeH = canvas.height * 0.12;
+      const tX = canvas.width / 2 - tapeW / 2 + tapeOffset.x, tY = canvas.height * 0.55 - tapeH / 2 + tapeOffset.y;
+      if (label.trim() !== '' && x >= tX && x <= tX + tapeW && y >= tY && y <= tY + tapeH) draggingRef.current = 'tape';
+      else if (coverSrc) draggingRef.current = 'cover';
     } else if (labelStyle === 'badge') {
-      const bcx = canvas.width / 2 + badgeOffset.x;
-      const bcy = canvas.height * 0.72 + badgeOffset.y;
+      const bcx = canvas.width / 2 + badgeOffset.x, bcy = canvas.height * 0.72 + badgeOffset.y;
       const dist = Math.sqrt((x - bcx) ** 2 + (y - bcy) ** 2);
-      if (label.trim() !== '' && dist <= badgeSize) {
-        draggingRef.current = 'badge';
-      } else if (coverSrc) {
-        draggingRef.current = 'cover';
-      }
+      if (label.trim() !== '' && dist <= badgeSize) draggingRef.current = 'badge';
+      else if (coverSrc) draggingRef.current = 'cover';
     } else if (coverSrc) {
       draggingRef.current = 'cover';
     }
-
     if (draggingRef.current) updateCursor(true);
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
     if (e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId);
@@ -632,8 +631,7 @@ export default function App() {
     if (!draggingRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
     const dx = (e.clientX - dragStartPosRef.current.x) * scaleX;
     const dy = (e.clientY - dragStartPosRef.current.y) * scaleY;
     if (draggingRef.current === 'tape') setTapeOffset(p => ({ x: p.x + dx, y: p.y + dy }));
@@ -642,18 +640,41 @@ export default function App() {
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
   };
 
-  const handlePointerUp = (e) => {
+  const handlePointerUp = useCallback((e) => {
+    const wasTarget = draggingRef.current;
     draggingRef.current = null;
     updateCursor(false);
     if (e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId);
-  };
+    // Push snapshot after drag ends (state has updated)
+    if (wasTarget) {
+      setTimeout(() => {
+        // Read current state via functional setters to avoid stale closure
+        let snap;
+        setTapeOffset(to => { snap = snap || {}; snap.tapeOffset = to; return to; });
+        setBadgeOffset(bo => { snap.badgeOffset = bo; return bo; });
+        setCoverOffset(co => { snap.coverOffset = co; return co; });
+        setCoverScale(cs => { snap.coverScale = cs; return cs; });
+        setCoverRotation(cr => { snap.coverRotation = cr; return cr; });
+        setLabel(l => { snap.label = l; return l; });
+        setLabelStyle(ls => { snap.labelStyle = ls; return ls; });
+        setTapeColor(tc => { snap.tapeColor = tc; return tc; });
+        setTapeOpacity(to2 => { snap.tapeOpacity = to2; return to2; });
+        setTapeRotation(tr => { snap.tapeRotation = tr; return tr; });
+        setFontSizeMultiplier(fsm => { snap.fontSizeMultiplier = fsm; return fsm; });
+        setFontFamily(ff => { snap.fontFamily = ff; return ff; });
+        setBadgeSize(bs => { snap.badgeSize = bs; return bs; });
+        setFolderColorOverride(fco => { snap.folderColorOverride = fco; return fco; });
+        // Push after all setters are batched
+        setTimeout(() => { if (snap && Object.keys(snap).length === 14) pushHistory(makeSnapshot(snap)); }, 0);
+      }, 0);
+    }
+  }, [pushHistory]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !baseImgData) return;
     const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
+    const w = canvas.width, h = canvas.height;
     const render = () => {
       ctx.clearRect(0, 0, w, h);
       const shape = FOLDERS[folderShape];
@@ -674,8 +695,7 @@ export default function App() {
       }
       if (coverImg) {
         ctx.save();
-        shape.buildFlapPath(ctx, folderRect);
-        ctx.clip();
+        shape.buildFlapPath(ctx, folderRect); ctx.clip();
         const { clipRect } = shape;
         const rectX = folderRect.x + clipRect.x * (folderRect.w / clipRect.vw);
         const rectY = folderRect.y + clipRect.y * (folderRect.h / clipRect.vh);
@@ -695,22 +715,15 @@ export default function App() {
         ctx.drawImage(coverImg, drawX, drawY, drawW, drawH);
         ctx.restore();
         const shadow = ctx.createLinearGradient(0, rectY, 0, rectY + rectH);
-        shadow.addColorStop(0, 'rgba(255,255,255,0.15)');
-        shadow.addColorStop(0.1, 'rgba(0,0,0,0)');
-        shadow.addColorStop(0.9, 'rgba(0,0,0,0)');
-        shadow.addColorStop(1, 'rgba(0,0,0,0.35)');
-        ctx.fillStyle = shadow;
-        ctx.fillRect(rectX, rectY, rectW, rectH);
+        shadow.addColorStop(0, 'rgba(255,255,255,0.15)'); shadow.addColorStop(0.1, 'rgba(0,0,0,0)');
+        shadow.addColorStop(0.9, 'rgba(0,0,0,0)'); shadow.addColorStop(1, 'rgba(0,0,0,0.35)');
+        ctx.fillStyle = shadow; ctx.fillRect(rectX, rectY, rectW, rectH);
         ctx.restore();
       }
       if (label.trim() !== '') {
-        if (labelStyle === 'dymo') {
-          drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
-        } else if (labelStyle === 'banner') {
-          drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
-        } else if (labelStyle === 'badge') {
-          drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
-        }
+        if (labelStyle === 'dymo') drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
+        else if (labelStyle === 'banner') drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
+        else if (labelStyle === 'badge') drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
       }
     };
     render();
@@ -724,70 +737,106 @@ export default function App() {
     const link = document.createElement('a');
     link.download = `folder_${getFileName()}.png`;
     link.href = canvas.toDataURL('image/png');
-    link.click();
-    setDownloadMenuOpen(false);
+    link.click(); setDownloadMenuOpen(false);
   };
 
   const handleDownloadIcns = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    setIsExporting(true);
-    setDownloadMenuOpen(false);
+    const canvas = canvasRef.current; if (!canvas) return;
+    setIsExporting(true); setDownloadMenuOpen(false);
     try {
       const blob = await buildIcns(canvas);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.download = `folder_${getFileName()}.icns`;
-      link.href = url;
-      link.click();
+      link.download = `folder_${getFileName()}.icns`; link.href = url; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } finally {
-      setIsExporting(false);
-    }
+    } finally { setIsExporting(false); }
   };
 
   const handleDownloadIco = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    setIsExporting(true);
-    setDownloadMenuOpen(false);
+    const canvas = canvasRef.current; if (!canvas) return;
+    setIsExporting(true); setDownloadMenuOpen(false);
     try {
       const blob = await buildIco(canvas);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.download = `folder_${getFileName()}.ico`;
-      link.href = url;
-      link.click();
+      link.download = `folder_${getFileName()}.ico`; link.href = url; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } finally {
-      setIsExporting(false);
-    }
+    } finally { setIsExporting(false); }
   };
 
   const isPresetColor = TAPE_COLORS.some(c => c.hex === tapeColor);
   const isCustomFolderColor = folderColorOverride !== null && !FOLDER_COLORS.slice(1).some(c => c.hex === folderColorOverride);
 
+  // ─── Wrappers that push history immediately (non-slider actions) ────────────────
+
+  const setLabelWithHistory = (v) => {
+    setLabel(v);
+    pushDebounced('label', makeSnapshot({ label: v, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+  };
+
+  const setLabelStyleWithHistory = (v) => {
+    setLabelStyle(v);
+    pushHistory(makeSnapshot({ label, labelStyle: v, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+  };
+
+  const setTapeColorWithHistory = (v) => {
+    setTapeColor(v);
+    pushHistory(makeSnapshot({ label, labelStyle, tapeColor: v, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+  };
+
+  const setTapeOpacityWithHistory = (v) => {
+    setTapeOpacity(v);
+    pushDebounced('opacity', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity: v, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+  };
+
+  const setTapeRotationWithHistory = (v) => {
+    setTapeRotation(v);
+    pushDebounced('tapeRotation', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation: v, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+  };
+
+  const setFontSizeMultiplierWithHistory = (v) => {
+    setFontSizeMultiplier(v);
+    pushDebounced('fontSize', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier: v, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+  };
+
+  const setFontFamilyWithHistory = (v) => {
+    setFontFamily(v);
+    pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily: v, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+  };
+
+  const setBadgeSizeWithHistory = (v) => {
+    setBadgeSize(v);
+    pushDebounced('badgeSize', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize: v, coverOffset, coverScale, coverRotation, folderColorOverride }));
+  };
+
+  const setFolderColorOverrideWithHistory = (v) => {
+    setFolderColorOverride(v);
+    pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride: v }));
+  };
+
+  const setCoverScaleWithHistory = (v) => {
+    setCoverScale(v);
+    pushDebounced('coverScale', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale: v, coverRotation, folderColorOverride }));
+  };
+
+  const setCoverRotationWithHistory = (v) => {
+    setCoverRotation(v);
+    pushDebounced('coverRotation', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation: v, folderColorOverride }));
+  };
+
   return (
     <div className="flex flex-col lg:flex-row h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-hidden">
       <span style={{ fontFamily: 'Space Mono', position: 'absolute', opacity: 0, pointerEvents: 'none' }}>.</span>
 
-      {/* aside: flex-col con overflow-y-auto sul solo contenuto scrollabile, footer sticky */}
       <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[45dvh] lg:h-full overflow-hidden">
-
-        {/* Scrollable content area */}
         <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
           <div className="relative p-6 lg:p-8 pb-4 lg:pb-6 border-b border-white/5 shrink-0">
             <div className="absolute top-4 right-5 lg:top-5 lg:right-7 flex items-center gap-0.5 bg-[#09090b] border border-neutral-800 rounded-md p-0.5">
               {['it', 'en'].map(l => (
-                <button
-                  key={l}
-                  onClick={() => switchLang(l)}
+                <button key={l} onClick={() => switchLang(l)}
                   className={`px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide transition-all ${
                     lang === l ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'
-                  }`}
-                >
-                  {l.toUpperCase()}
-                </button>
+                  }`}>{l.toUpperCase()}</button>
               ))}
             </div>
             <div className="flex items-center gap-3">
@@ -806,40 +855,22 @@ export default function App() {
               <div className="relative">
                 <label
                   className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all border border-dashed rounded-xl cursor-pointer group overflow-hidden relative"
-                  style={coverSrc ? {
-                    backgroundImage: `url(${coverSrc})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    borderColor: 'rgba(255,255,255,0.15)',
-                  } : {
-                    backgroundColor: '#09090b',
-                    borderColor: 'rgba(255,255,255,0.15)',
-                  }}
+                  style={coverSrc ? { backgroundImage: `url(${coverSrc})`, backgroundSize: 'cover', backgroundPosition: 'center', borderColor: 'rgba(255,255,255,0.15)' } : { backgroundColor: '#09090b', borderColor: 'rgba(255,255,255,0.15)' }}
                 >
-                  {/* overlay scuro quando c'è thumbnail */}
-                  {coverSrc && (
-                    <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors" />
-                  )}
-                  {!coverSrc && (
-                    <div className="absolute inset-0 group-hover:bg-blue-500/5 transition-colors rounded-xl" />
-                  )}
+                  {coverSrc && <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors" />}
+                  {!coverSrc && <div className="absolute inset-0 group-hover:bg-blue-500/5 transition-colors rounded-xl" />}
                   <div className="relative z-10 flex flex-col items-center space-y-2 text-center">
                     <div className={`p-3 rounded-full transition-colors ${coverSrc ? 'bg-white/10 group-hover:bg-white/20' : 'bg-neutral-800 group-hover:bg-blue-500/20'}`}>
                       <Upload size={20} className={coverSrc ? 'text-white' : 'text-neutral-400 group-hover:text-blue-400'} />
                     </div>
-                    <span className={`font-medium text-sm ${coverSrc ? 'text-white' : 'text-neutral-300'}`}>
-                      {coverSrc ? t.changeImage : t.uploadImage}
-                    </span>
+                    <span className={`font-medium text-sm ${coverSrc ? 'text-white' : 'text-neutral-300'}`}>{coverSrc ? t.changeImage : t.uploadImage}</span>
                     <span className={`text-xs ${coverSrc ? 'text-white/60' : 'text-neutral-500'}`}>{t.uploadFormats}</span>
                   </div>
                   <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
                 </label>
                 {coverSrc && (
-                  <button
-                    onClick={handleClearImage}
-                    title={t.removeImage}
-                    className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-800 hover:bg-red-500/80 text-neutral-400 hover:text-white transition-all z-20"
-                  >
+                  <button onClick={handleClearImage} title={t.removeImage}
+                    className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-800 hover:bg-red-500/80 text-neutral-400 hover:text-white transition-all z-20">
                     <X size={12} />
                   </button>
                 )}
@@ -852,7 +883,8 @@ export default function App() {
                       <span className="flex items-center gap-1"><ZoomIn size={14} /> {t.zoom}</span>
                       <span>{Math.round(coverScale * 100)}%</span>
                     </div>
-                    <input type="range" min="0.5" max="2.5" step="0.05" value={coverScale} onChange={e => setCoverScale(parseFloat(e.target.value))}
+                    <input type="range" min="0.5" max="2.5" step="0.05" value={coverScale}
+                      onChange={e => setCoverScaleWithHistory(parseFloat(e.target.value))}
                       className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   </div>
                   <div>
@@ -860,68 +892,40 @@ export default function App() {
                       <span className="flex items-center gap-1"><RotateCw size={14} /> {t.coverRotation}</span>
                       <span>{coverRotation}°</span>
                     </div>
-                    <input type="range" min="-180" max="180" step="1" value={coverRotation} onChange={e => setCoverRotation(parseInt(e.target.value))}
+                    <input type="range" min="-180" max="180" step="1" value={coverRotation}
+                      onChange={e => setCoverRotationWithHistory(parseInt(e.target.value))}
                       className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   </div>
                 </div>
               )}
 
               <div className="space-y-2">
-                <label className="text-xs text-neutral-500 flex items-center gap-1">
-                  <Palette size={13} /> {t.folderColor}
-                </label>
+                <label className="text-xs text-neutral-500 flex items-center gap-1"><Palette size={13} /> {t.folderColor}</label>
                 <div className="flex flex-wrap gap-2 items-center">
-                  <button
-                    onClick={() => setFolderColorOverride(null)}
-                    title={t.defaultColor}
+                  <button onClick={() => setFolderColorOverrideWithHistory(null)} title={t.defaultColor}
                     className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-                      folderColorOverride === null
-                        ? 'border-blue-500 scale-110 bg-[#4B8EF0] text-white'
-                        : 'border-neutral-600 bg-gradient-to-br from-[#6aadff] to-[#2171e8] hover:scale-105'
-                    }`}
-                  >
+                      folderColorOverride === null ? 'border-blue-500 scale-110 bg-[#4B8EF0] text-white' : 'border-neutral-600 bg-gradient-to-br from-[#6aadff] to-[#2171e8] hover:scale-105'
+                    }`}>
                     {folderColorOverride === null && <Check size={11} />}
                   </button>
                   {FOLDER_COLORS.slice(1).map(color => (
-                    <button
-                      key={color.id}
-                      onClick={() => setFolderColorOverride(color.hex)}
-                      title={color.name}
+                    <button key={color.id} onClick={() => setFolderColorOverrideWithHistory(color.hex)} title={color.name}
                       className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-                        folderColorOverride === color.hex && !isCustomFolderColor
-                          ? 'border-white scale-110'
-                          : 'border-transparent hover:scale-105'
-                      }`}
-                      style={{ backgroundColor: color.hex }}
-                    >
-                      {folderColorOverride === color.hex && !isCustomFolderColor && (
-                        <Check size={11} style={{ color: getTapeTextColor(color.hex) }} />
-                      )}
+                        folderColorOverride === color.hex && !isCustomFolderColor ? 'border-white scale-110' : 'border-transparent hover:scale-105'
+                      }`} style={{ backgroundColor: color.hex }}>
+                      {folderColorOverride === color.hex && !isCustomFolderColor && <Check size={11} style={{ color: getTapeTextColor(color.hex) }} />}
                     </button>
                   ))}
-                  <button
-                    onClick={() => folderColorInputRef.current?.click()}
-                    title={t.customColor}
+                  <button onClick={() => folderColorInputRef.current?.click()} title={t.customColor}
                     className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
                       isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
-                    }`}
-                    style={isCustomFolderColor ? { backgroundColor: folderColorOverride } : {}}
-                  >
-                    {isCustomFolderColor
-                      ? <Check size={11} style={{ color: '#fff', mixBlendMode: 'difference' }} />
-                      : <Palette size={11} className="text-neutral-400" />
-                    }
+                    }`} style={isCustomFolderColor ? { backgroundColor: folderColorOverride } : {}}>
+                    {isCustomFolderColor ? <Check size={11} style={{ color: '#fff', mixBlendMode: 'difference' }} /> : <Palette size={11} className="text-neutral-400" />}
                   </button>
-                  <input
-                    ref={folderColorInputRef}
-                    type="color"
+                  <input ref={folderColorInputRef} type="color"
                     value={isCustomFolderColor ? folderColorOverride : customFolderColor}
-                    onChange={e => {
-                      setCustomFolderColor(e.target.value);
-                      setFolderColorOverride(e.target.value);
-                    }}
-                    className="sr-only"
-                  />
+                    onChange={e => { setCustomFolderColor(e.target.value); setFolderColorOverrideWithHistory(e.target.value); }}
+                    className="sr-only" />
                 </div>
               </div>
             </section>
@@ -934,34 +938,21 @@ export default function App() {
               </h2>
 
               <div className="flex gap-2">
-                <button onClick={() => setLabelStyle('dymo')}
-                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
-                    labelStyle === 'dymo' ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                  }`}>
-                  {t.styleDymo}
-                </button>
-                <button onClick={() => setLabelStyle('banner')}
-                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
-                    labelStyle === 'banner' ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                  }`}>
-                  {t.styleBanner}
-                </button>
-                <button onClick={() => setLabelStyle('badge')}
-                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
-                    labelStyle === 'badge' ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                  }`}>
-                  {t.styleBadge}
-                </button>
+                {['dymo', 'banner', 'badge'].map(style => (
+                  <button key={style} onClick={() => setLabelStyleWithHistory(style)}
+                    className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
+                      labelStyle === style ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                    }`}>
+                    {t[`style${style.charAt(0).toUpperCase()}${style.slice(1)}`]}
+                  </button>
+                ))}
               </div>
 
               <div className="space-y-2">
                 <label className="text-xs text-neutral-500">{t.labelText}</label>
-                <input
-                  type="text" value={label} maxLength={30}
-                  onChange={e => setLabel(e.target.value)}
+                <input type="text" value={label} maxLength={30} onChange={e => setLabelWithHistory(e.target.value)}
                   className="w-full bg-[#09090b] border border-neutral-700/50 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all"
-                  placeholder={t.labelPlaceholder}
-                />
+                  placeholder={t.labelPlaceholder} />
               </div>
 
               {label.trim() !== '' && (
@@ -970,7 +961,7 @@ export default function App() {
                     <label className="text-xs text-neutral-500">{t.font}</label>
                     <div className="grid grid-cols-4 gap-2">
                       {FONT_OPTIONS.map(opt => (
-                        <button key={opt.id} onClick={() => setFontFamily(opt.family)}
+                        <button key={opt.id} onClick={() => setFontFamilyWithHistory(opt.family)}
                           className={`py-2 px-1 rounded-lg border text-xs transition-all ${
                             fontFamily === opt.family ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
                           }`} style={{ fontFamily: opt.family }}>
@@ -985,7 +976,8 @@ export default function App() {
                       <span className="flex items-center gap-1"><Type size={13} /> {t.fontSize}</span>
                       <span>{Math.round(fontSizeMultiplier * 100)}%</span>
                     </div>
-                    <input type="range" min="0.4" max="1.6" step="0.05" value={fontSizeMultiplier} onChange={e => setFontSizeMultiplier(parseFloat(e.target.value))}
+                    <input type="range" min="0.4" max="1.6" step="0.05" value={fontSizeMultiplier}
+                      onChange={e => setFontSizeMultiplierWithHistory(parseFloat(e.target.value))}
                       className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   </div>
 
@@ -996,13 +988,15 @@ export default function App() {
                         <div className="flex items-center gap-1">
                           <span>{tapeRotation.toFixed(1)}°</span>
                           {tapeRotation !== -2.3 && (
-                            <button onClick={() => setTapeRotation(-2.3)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
+                            <button onClick={() => { setTapeRotation(-2.3); pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation: -2.3, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride })); }}
+                              className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
                               <RotateCcw size={10} />
                             </button>
                           )}
                         </div>
                       </div>
-                      <input type="range" min="-15" max="15" step="0.5" value={tapeRotation} onChange={e => setTapeRotation(parseFloat(e.target.value))}
+                      <input type="range" min="-15" max="15" step="0.5" value={tapeRotation}
+                        onChange={e => setTapeRotationWithHistory(parseFloat(e.target.value))}
                         className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                     </div>
                   )}
@@ -1014,13 +1008,15 @@ export default function App() {
                         <div className="flex items-center gap-1">
                           <span>{badgeSize}px</span>
                           {badgeSize !== 160 && (
-                            <button onClick={() => setBadgeSize(160)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
+                            <button onClick={() => { setBadgeSize(160); pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize: 160, coverOffset, coverScale, coverRotation, folderColorOverride })); }}
+                              className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
                               <RotateCcw size={10} />
                             </button>
                           )}
                         </div>
                       </div>
-                      <input type="range" min="60" max="220" step="5" value={badgeSize} onChange={e => setBadgeSize(parseInt(e.target.value))}
+                      <input type="range" min="60" max="220" step="5" value={badgeSize}
+                        onChange={e => setBadgeSizeWithHistory(parseInt(e.target.value))}
                         className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                     </div>
                   )}
@@ -1033,7 +1029,10 @@ export default function App() {
                       {((labelStyle === 'dymo' && (tapeOffset.x !== 0 || tapeOffset.y !== 0)) ||
                         (labelStyle === 'badge' && (badgeOffset.x !== 0 || badgeOffset.y !== 0))) && (
                         <button
-                          onClick={() => labelStyle === 'dymo' ? setTapeOffset({ x: 0, y: 0 }) : setBadgeOffset({ x: 0, y: 0 })}
+                          onClick={() => {
+                            if (labelStyle === 'dymo') { setTapeOffset({ x: 0, y: 0 }); pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset: { x: 0, y: 0 }, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride })); }
+                            else { setBadgeOffset({ x: 0, y: 0 }); pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset: { x: 0, y: 0 }, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride })); }
+                          }}
                           className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0">
                           <RotateCcw size={10} /> {t.resetBtn}
                         </button>
@@ -1047,33 +1046,22 @@ export default function App() {
                     </label>
                     <div className="flex gap-3 items-center">
                       {TAPE_COLORS.map(color => (
-                        <button key={color.id} onClick={() => setTapeColor(color.hex)}
+                        <button key={color.id} onClick={() => setTapeColorWithHistory(color.hex)}
                           className={`relative w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${
                             tapeColor === color.hex ? 'border-blue-500 scale-110' : 'border-transparent hover:scale-105'
                           }`} style={{ backgroundColor: color.hex }} title={color.name}>
                           {tapeColor === color.hex && <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />}
                         </button>
                       ))}
-                      <button
-                        onClick={() => tapeColorInputRef.current?.click()}
-                        title={t.customColor}
+                      <button onClick={() => tapeColorInputRef.current?.click()} title={t.customColor}
                         className={`relative w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
                           !isPresetColor ? 'border-blue-500 scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
-                        }`}
-                        style={!isPresetColor ? { backgroundColor: tapeColor } : {}}
-                      >
-                        {isPresetColor
-                          ? <Palette size={12} className="text-neutral-400" />
-                          : <Check size={14} style={{ color: '#fff', mixBlendMode: 'difference' }} />
-                        }
+                        }`} style={!isPresetColor ? { backgroundColor: tapeColor } : {}}>
+                        {isPresetColor ? <Palette size={12} className="text-neutral-400" /> : <Check size={14} style={{ color: '#fff', mixBlendMode: 'difference' }} />}
                       </button>
-                      <input
-                        ref={tapeColorInputRef}
-                        type="color"
-                        value={tapeColor}
-                        onChange={e => setTapeColor(e.target.value)}
-                        className="sr-only"
-                      />
+                      <input ref={tapeColorInputRef} type="color" value={tapeColor}
+                        onChange={e => setTapeColorWithHistory(e.target.value)}
+                        className="sr-only" />
                     </div>
                   </div>
 
@@ -1082,7 +1070,8 @@ export default function App() {
                       <span className="flex items-center gap-1"><Droplet size={14} /> {t.opacity}</span>
                       <span>{Math.round(tapeOpacity * 100)}%</span>
                     </div>
-                    <input type="range" min="0.1" max="1" step="0.05" value={tapeOpacity} onChange={e => setTapeOpacity(parseFloat(e.target.value))}
+                    <input type="range" min="0.1" max="1" step="0.05" value={tapeOpacity}
+                      onChange={e => setTapeOpacityWithHistory(parseFloat(e.target.value))}
                       className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   </div>
                 </>
@@ -1091,64 +1080,53 @@ export default function App() {
           </div>
         </div>
 
-        {/* Footer sticky — sempre visibile in fondo alla sidebar */}
+        {/* Footer sticky */}
         <div className="shrink-0 p-6 lg:p-8 pt-4 border-t border-white/5 bg-[#121214]">
+
+          {/* Undo / Redo */}
+          <div className="flex gap-2 mb-4">
+            <button onClick={undo} disabled={!canUndo} title={`${t.undo} (Cmd+Z)`}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-medium transition-all ${
+                canUndo ? 'border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-neutral-500 hover:text-white' : 'border-neutral-800/30 bg-[#09090b]/40 text-neutral-600 cursor-not-allowed'
+              }`}>
+              <Undo2 size={13} /> {t.undo}
+            </button>
+            <button onClick={redo} disabled={!canRedo} title={`${t.redo} (Cmd+Shift+Z)`}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-medium transition-all ${
+                canRedo ? 'border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-neutral-500 hover:text-white' : 'border-neutral-800/30 bg-[#09090b]/40 text-neutral-600 cursor-not-allowed'
+              }`}>
+              <Redo2 size={13} /> {t.redo}
+            </button>
+          </div>
+
           <div ref={downloadMenuRef} className="relative w-full mb-6">
             <div className="flex w-full">
-              <button
-                onClick={handleDownloadPng}
-                disabled={isExporting}
-                className="liquid-glass-btn flex-1 font-medium py-3.5 px-4 rounded-l-xl flex items-center justify-center gap-2"
-              >
-                {isExporting
-                  ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
-                  : <Download size={18} />
-                }
+              <button onClick={handleDownloadPng} disabled={isExporting}
+                className="liquid-glass-btn flex-1 font-medium py-3.5 px-4 rounded-l-xl flex items-center justify-center gap-2">
+                {isExporting ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <Download size={18} />}
                 {t.download} PNG
               </button>
-              <button
-                onClick={() => setDownloadMenuOpen(o => !o)}
-                disabled={isExporting}
+              <button onClick={() => setDownloadMenuOpen(o => !o)} disabled={isExporting}
                 className="liquid-glass-btn font-medium py-3.5 px-3 rounded-r-xl border-l border-white/10 flex items-center justify-center"
-                aria-label="Altre opzioni di download"
-              >
+                aria-label="Altre opzioni di download">
                 <ChevronDown size={16} className={`transition-transform ${downloadMenuOpen ? 'rotate-180' : ''}`} />
               </button>
             </div>
-
             {downloadMenuOpen && (
               <div className="absolute bottom-full mb-2 left-0 right-0 bg-[#1c1c1e] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50">
-                <button
-                  onClick={handleDownloadPng}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left"
-                >
+                <button onClick={handleDownloadPng} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left">
                   <Download size={15} className="text-neutral-400 shrink-0" />
-                  <div>
-                    <div className="font-medium">{t.downloadPng}</div>
-                    <div className="text-[11px] text-neutral-500">Universale, massima qualità</div>
-                  </div>
+                  <div><div className="font-medium">{t.downloadPng}</div><div className="text-[11px] text-neutral-500">Universale, massima qualità</div></div>
                 </button>
                 <div className="h-px bg-white/5" />
-                <button
-                  onClick={handleDownloadIcns}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left"
-                >
+                <button onClick={handleDownloadIcns} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left">
                   <Download size={15} className="text-neutral-400 shrink-0" />
-                  <div>
-                    <div className="font-medium">{t.downloadIcns}</div>
-                    <div className="text-[11px] text-neutral-500">11 risoluzioni + Retina @2x</div>
-                  </div>
+                  <div><div className="font-medium">{t.downloadIcns}</div><div className="text-[11px] text-neutral-500">11 risoluzioni + Retina @2x</div></div>
                 </button>
                 <div className="h-px bg-white/5" />
-                <button
-                  onClick={handleDownloadIco}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left"
-                >
+                <button onClick={handleDownloadIco} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left">
                   <Download size={15} className="text-neutral-400 shrink-0" />
-                  <div>
-                    <div className="font-medium">{t.downloadIco}</div>
-                    <div className="text-[11px] text-neutral-500">6 risoluzioni (16→256px)</div>
-                  </div>
+                  <div><div className="font-medium">{t.downloadIco}</div><div className="text-[11px] text-neutral-500">6 risoluzioni (16→256px)</div></div>
                 </button>
               </div>
             )}
@@ -1179,21 +1157,9 @@ export default function App() {
             backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
             transition: all 0.2s ease; text-shadow: 0 1px 3px rgba(0,0,0,0.4);
           }
-          .liquid-glass-btn::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%;
-            background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, transparent 100%);
-            border-radius: inherit; pointer-events: none;
-          }
-          .liquid-glass-btn::after {
-            content: ''; position: absolute; inset: 0;
-            background: radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.08) 0%, transparent 60%);
-            pointer-events: none;
-          }
-          .liquid-glass-btn:hover {
-            background: linear-gradient(145deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.15) 100%);
-            border-color: rgba(255,255,255,0.28);
-            box-shadow: 0 2px 0 rgba(255,255,255,0.16) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 12px 40px rgba(0,0,0,0.4), 0 1px 12px rgba(255,255,255,0.06);
-          }
+          .liquid-glass-btn::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, transparent 100%); border-radius: inherit; pointer-events: none; }
+          .liquid-glass-btn::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.08) 0%, transparent 60%); pointer-events: none; }
+          .liquid-glass-btn:hover { background: linear-gradient(145deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.15) 100%); border-color: rgba(255,255,255,0.28); box-shadow: 0 2px 0 rgba(255,255,255,0.16) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 12px 40px rgba(0,0,0,0.4), 0 1px 12px rgba(255,255,255,0.06); }
           .liquid-glass-btn:active { transform: scale(0.98); box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 4px 16px rgba(0,0,0,0.3); }
           .liquid-glass-btn:disabled { opacity: 0.6; cursor: not-allowed; }
           @keyframes bounce-x { 0%,100% { transform: translateX(0); } 50% { transform: translateX(-6px); } }
@@ -1202,8 +1168,7 @@ export default function App() {
 
         {!coverSrc && (
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-neutral-600 text-xs pointer-events-none select-none">
-            <span className="animate-bounce-x">←</span>
-            <span>{t.uploadHint}</span>
+            <span className="animate-bounce-x">←</span><span>{t.uploadHint}</span>
           </div>
         )}
 
@@ -1213,10 +1178,7 @@ export default function App() {
               <Move size={12} /> {t.dragCanvasHint}
             </div>
           )}
-          <canvas
-            ref={canvasRef}
-            width={1024}
-            height={1024}
+          <canvas ref={canvasRef} width={1024} height={1024}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
