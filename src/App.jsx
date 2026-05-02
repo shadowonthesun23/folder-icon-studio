@@ -382,8 +382,6 @@ const IconInstagram = ({ size = 16, className = '' }) => (
   </svg>
 );
 
-// ─── History helpers (outside component, pure functions) ──────────────────────────
-
 const makeSnapshot = (s) => ({ ...s });
 
 export default function App() {
@@ -421,6 +419,15 @@ export default function App() {
   const historyIndexRef = useRef(0);
   const sliderDebounceRef = useRef({});
   const isRestoringRef = useRef(false);
+
+  // ─── stateRef: always-current snapshot, updated via useEffect ────────────────
+  const stateRef = useRef({
+    label: 'Archivio 01', labelStyle: 'dymo', tapeColor: '#f4ebd0', tapeOpacity: 1,
+    tapeRotation: -2.3, fontSizeMultiplier: 1, fontFamily: 'Space Mono',
+    tapeOffset: { x: 0, y: 0 }, badgeOffset: { x: 0, y: 0 }, badgeSize: 160,
+    coverOffset: { x: 0, y: 0 }, coverScale: 1, coverRotation: 0, folderColorOverride: null,
+  });
+
   const [lang, setLang] = useState(() => {
     try { return localStorage.getItem('fis_lang') || 'it'; } catch { return 'it'; }
   });
@@ -428,13 +435,28 @@ export default function App() {
   const t = TRANSLATIONS[lang];
   const effectiveTintColor = folderColorOverride ?? dominantColor ?? null;
 
+  // Keep stateRef in sync — runs after every render, no extra re-renders
+  useEffect(() => {
+    stateRef.current = {
+      label, labelStyle, tapeColor, tapeOpacity, tapeRotation,
+      fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize,
+      coverOffset, coverScale, coverRotation, folderColorOverride,
+    };
+  });
+
   // ─── History core ──────────────────────────────────────────────────────────
 
-  const getSnapshot = useCallback(() => makeSnapshot({
-    label, labelStyle, tapeColor, tapeOpacity, tapeRotation,
-    fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize,
-    coverOffset, coverScale, coverRotation, folderColorOverride,
-  }), [label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride]);
+  const pushHistory = useCallback((snap) => {
+    if (isRestoringRef.current) return;
+    const stack = historyRef.current;
+    const idx = historyIndexRef.current;
+    const newStack = stack.slice(0, idx + 1);
+    newStack.push(snap);
+    if (newStack.length > HISTORY_CAP) newStack.shift();
+    historyRef.current = newStack;
+    historyIndexRef.current = newStack.length - 1;
+    setHistoryIndex(newStack.length - 1);
+  }, []);
 
   const applySnapshot = useCallback((snap) => {
     isRestoringRef.current = true;
@@ -452,21 +474,7 @@ export default function App() {
     setCoverScale(snap.coverScale);
     setCoverRotation(snap.coverRotation);
     setFolderColorOverride(snap.folderColorOverride);
-    // reset flag after all setters flush
     setTimeout(() => { isRestoringRef.current = false; }, 0);
-  }, []);
-
-  const pushHistory = useCallback((snap) => {
-    if (isRestoringRef.current) return;
-    const stack = historyRef.current;
-    const idx = historyIndexRef.current;
-    // truncate future
-    const newStack = stack.slice(0, idx + 1);
-    newStack.push(snap);
-    if (newStack.length > HISTORY_CAP) newStack.shift();
-    historyRef.current = newStack;
-    historyIndexRef.current = newStack.length - 1;
-    setHistoryIndex(newStack.length - 1);
   }, []);
 
   const undo = useCallback(() => {
@@ -494,33 +502,16 @@ export default function App() {
   // Seed initial snapshot once
   useEffect(() => {
     if (historyRef.current.length === 0) {
-      const snap = makeSnapshot({
-        label: 'Archivio 01', labelStyle: 'dymo', tapeColor: '#f4ebd0', tapeOpacity: 1,
-        tapeRotation: -2.3, fontSizeMultiplier: 1, fontFamily: 'Space Mono',
-        tapeOffset: { x: 0, y: 0 }, badgeOffset: { x: 0, y: 0 }, badgeSize: 160,
-        coverOffset: { x: 0, y: 0 }, coverScale: 1, coverRotation: 0, folderColorOverride: null,
-      });
-      historyRef.current = [snap];
+      historyRef.current = [makeSnapshot(stateRef.current)];
       historyIndexRef.current = 0;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Push history helpers for immediate actions (not sliders) ────────────────────
-
-  const pushNow = useCallback(() => {
-    // We can't call getSnapshot here because state hasn't settled yet.
-    // Instead we schedule a microtask to read the latest ref-based snapshot.
-    // Since React batches setState, we use setTimeout 0 to read post-flush values.
-    // Caller must pass the snapshot directly.
-  }, []);
-
-  // Debounced push for sliders — each slider has its own key
+  // Debounced push for sliders
   const pushDebounced = useCallback((key, snap) => {
     if (sliderDebounceRef.current[key]) clearTimeout(sliderDebounceRef.current[key]);
-    sliderDebounceRef.current[key] = setTimeout(() => {
-      pushHistory(snap);
-    }, 600);
+    sliderDebounceRef.current[key] = setTimeout(() => { pushHistory(snap); }, 600);
   }, [pushHistory]);
 
   // ─── Keyboard shortcuts ─────────────────────────────────────────────────────
@@ -640,33 +631,18 @@ export default function App() {
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
   };
 
+  // ─── handlePointerUp: reads from stateRef — no functional setters, no black canvas ───
   const handlePointerUp = useCallback((e) => {
     const wasTarget = draggingRef.current;
     draggingRef.current = null;
     updateCursor(false);
     if (e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId);
-    // Push snapshot after drag ends (state has updated)
     if (wasTarget) {
-      setTimeout(() => {
-        // Read current state via functional setters to avoid stale closure
-        let snap;
-        setTapeOffset(to => { snap = snap || {}; snap.tapeOffset = to; return to; });
-        setBadgeOffset(bo => { snap.badgeOffset = bo; return bo; });
-        setCoverOffset(co => { snap.coverOffset = co; return co; });
-        setCoverScale(cs => { snap.coverScale = cs; return cs; });
-        setCoverRotation(cr => { snap.coverRotation = cr; return cr; });
-        setLabel(l => { snap.label = l; return l; });
-        setLabelStyle(ls => { snap.labelStyle = ls; return ls; });
-        setTapeColor(tc => { snap.tapeColor = tc; return tc; });
-        setTapeOpacity(to2 => { snap.tapeOpacity = to2; return to2; });
-        setTapeRotation(tr => { snap.tapeRotation = tr; return tr; });
-        setFontSizeMultiplier(fsm => { snap.fontSizeMultiplier = fsm; return fsm; });
-        setFontFamily(ff => { snap.fontFamily = ff; return ff; });
-        setBadgeSize(bs => { snap.badgeSize = bs; return bs; });
-        setFolderColorOverride(fco => { snap.folderColorOverride = fco; return fco; });
-        // Push after all setters are batched
-        setTimeout(() => { if (snap && Object.keys(snap).length === 14) pushHistory(makeSnapshot(snap)); }, 0);
-      }, 0);
+      // stateRef is updated by useEffect after the move setState calls settle.
+      // We wait one frame so the effect has run with the final position values.
+      requestAnimationFrame(() => {
+        pushHistory(makeSnapshot(stateRef.current));
+      });
     }
   }, [pushHistory]);
 
@@ -767,61 +743,61 @@ export default function App() {
   const isPresetColor = TAPE_COLORS.some(c => c.hex === tapeColor);
   const isCustomFolderColor = folderColorOverride !== null && !FOLDER_COLORS.slice(1).some(c => c.hex === folderColorOverride);
 
-  // ─── Wrappers that push history immediately (non-slider actions) ────────────────
+  // ─── Wrappers con history ────────────────────────────────────────────────────
 
   const setLabelWithHistory = (v) => {
     setLabel(v);
-    pushDebounced('label', makeSnapshot({ label: v, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+    pushDebounced('label', makeSnapshot({ ...stateRef.current, label: v }));
   };
 
   const setLabelStyleWithHistory = (v) => {
     setLabelStyle(v);
-    pushHistory(makeSnapshot({ label, labelStyle: v, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+    pushHistory(makeSnapshot({ ...stateRef.current, labelStyle: v }));
   };
 
   const setTapeColorWithHistory = (v) => {
     setTapeColor(v);
-    pushHistory(makeSnapshot({ label, labelStyle, tapeColor: v, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+    pushHistory(makeSnapshot({ ...stateRef.current, tapeColor: v }));
   };
 
   const setTapeOpacityWithHistory = (v) => {
     setTapeOpacity(v);
-    pushDebounced('opacity', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity: v, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+    pushDebounced('opacity', makeSnapshot({ ...stateRef.current, tapeOpacity: v }));
   };
 
   const setTapeRotationWithHistory = (v) => {
     setTapeRotation(v);
-    pushDebounced('tapeRotation', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation: v, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+    pushDebounced('tapeRotation', makeSnapshot({ ...stateRef.current, tapeRotation: v }));
   };
 
   const setFontSizeMultiplierWithHistory = (v) => {
     setFontSizeMultiplier(v);
-    pushDebounced('fontSize', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier: v, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+    pushDebounced('fontSize', makeSnapshot({ ...stateRef.current, fontSizeMultiplier: v }));
   };
 
   const setFontFamilyWithHistory = (v) => {
     setFontFamily(v);
-    pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily: v, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride }));
+    pushHistory(makeSnapshot({ ...stateRef.current, fontFamily: v }));
   };
 
   const setBadgeSizeWithHistory = (v) => {
     setBadgeSize(v);
-    pushDebounced('badgeSize', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize: v, coverOffset, coverScale, coverRotation, folderColorOverride }));
+    pushDebounced('badgeSize', makeSnapshot({ ...stateRef.current, badgeSize: v }));
   };
 
   const setFolderColorOverrideWithHistory = (v) => {
     setFolderColorOverride(v);
-    pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride: v }));
+    pushHistory(makeSnapshot({ ...stateRef.current, folderColorOverride: v }));
   };
 
   const setCoverScaleWithHistory = (v) => {
     setCoverScale(v);
-    pushDebounced('coverScale', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale: v, coverRotation, folderColorOverride }));
+    pushDebounced('coverScale', makeSnapshot({ ...stateRef.current, coverScale: v }));
   };
 
   const setCoverRotationWithHistory = (v) => {
     setCoverRotation(v);
-    pushDebounced('coverRotation', makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation: v, folderColorOverride }));
+    pushDebounced('coverRotation', makeSnapshot({ ...stateRef.current, coverRotation: v }));
   };
 
   return (
@@ -988,7 +964,7 @@ export default function App() {
                         <div className="flex items-center gap-1">
                           <span>{tapeRotation.toFixed(1)}°</span>
                           {tapeRotation !== -2.3 && (
-                            <button onClick={() => { setTapeRotation(-2.3); pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation: -2.3, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride })); }}
+                            <button onClick={() => { setTapeRotation(-2.3); pushHistory(makeSnapshot({ ...stateRef.current, tapeRotation: -2.3 })); }}
                               className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
                               <RotateCcw size={10} />
                             </button>
@@ -1008,7 +984,7 @@ export default function App() {
                         <div className="flex items-center gap-1">
                           <span>{badgeSize}px</span>
                           {badgeSize !== 160 && (
-                            <button onClick={() => { setBadgeSize(160); pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize: 160, coverOffset, coverScale, coverRotation, folderColorOverride })); }}
+                            <button onClick={() => { setBadgeSize(160); pushHistory(makeSnapshot({ ...stateRef.current, badgeSize: 160 })); }}
                               className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
                               <RotateCcw size={10} />
                             </button>
@@ -1030,8 +1006,8 @@ export default function App() {
                         (labelStyle === 'badge' && (badgeOffset.x !== 0 || badgeOffset.y !== 0))) && (
                         <button
                           onClick={() => {
-                            if (labelStyle === 'dymo') { setTapeOffset({ x: 0, y: 0 }); pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset: { x: 0, y: 0 }, badgeOffset, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride })); }
-                            else { setBadgeOffset({ x: 0, y: 0 }); pushHistory(makeSnapshot({ label, labelStyle, tapeColor, tapeOpacity, tapeRotation, fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset: { x: 0, y: 0 }, badgeSize, coverOffset, coverScale, coverRotation, folderColorOverride })); }
+                            if (labelStyle === 'dymo') { setTapeOffset({ x: 0, y: 0 }); pushHistory(makeSnapshot({ ...stateRef.current, tapeOffset: { x: 0, y: 0 } })); }
+                            else { setBadgeOffset({ x: 0, y: 0 }); pushHistory(makeSnapshot({ ...stateRef.current, badgeOffset: { x: 0, y: 0 } })); }
                           }}
                           className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0">
                           <RotateCcw size={10} /> {t.resetBtn}
