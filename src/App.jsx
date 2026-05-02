@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown, Circle, Undo2, Redo2 } from 'lucide-react';
+import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown, Circle, Undo2, Redo2, BookmarkPlus, Bookmark, Trash2 } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
 const TRANSLATIONS = {
@@ -41,6 +41,12 @@ const TRANSLATIONS = {
     removeImage: 'Rimuovi immagine',
     undo: 'Annulla',
     redo: 'Ripeti',
+    section3: '3. Preset',
+    savePreset: 'Salva preset',
+    presetNamePlaceholder: 'Nome preset...',
+    noPresets: 'Nessun preset salvato',
+    applyPreset: 'Applica',
+    deletePreset: 'Elimina',
   },
   en: {
     subtitle: 'Create custom macOS icons.',
@@ -80,6 +86,12 @@ const TRANSLATIONS = {
     removeImage: 'Remove image',
     undo: 'Undo',
     redo: 'Redo',
+    section3: '3. Presets',
+    savePreset: 'Save preset',
+    presetNamePlaceholder: 'Preset name...',
+    noPresets: 'No saved presets',
+    applyPreset: 'Apply',
+    deletePreset: 'Delete',
   }
 };
 
@@ -174,6 +186,7 @@ const FONT_OPTIONS = [
 ];
 
 const HISTORY_CAP = 50;
+const LS_PRESETS_KEY = 'fis_presets';
 
 const rgbToHex = (r, g, b) => '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
 
@@ -382,6 +395,19 @@ const IconInstagram = ({ size = 16, className = '' }) => (
   </svg>
 );
 
+// ─── Preset helpers ──────────────────────────────────────────────────────────
+
+const loadPresetsFromStorage = () => {
+  try {
+    const raw = localStorage.getItem(LS_PRESETS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
+const savePresetsToStorage = (presets) => {
+  try { localStorage.setItem(LS_PRESETS_KEY, JSON.stringify(presets)); } catch {}
+};
+
 const makeSnapshot = (s) => ({ ...s });
 
 export default function App() {
@@ -420,7 +446,12 @@ export default function App() {
   const sliderDebounceRef = useRef({});
   const isRestoringRef = useRef(false);
 
-  // ─── stateRef: always-current snapshot, updated via useEffect ────────────────
+  // ─── Preset state ────────────────────────────────────────────────────────────
+  const [presets, setPresets] = useState(() => loadPresetsFromStorage());
+  const [presetName, setPresetName] = useState('');
+  const [presetsOpen, setPresetsOpen] = useState(false);
+
+  // ─── stateRef: always-current snapshot ──────────────────────────────────────
   const stateRef = useRef({
     label: 'Archivio 01', labelStyle: 'dymo', tapeColor: '#f4ebd0', tapeOpacity: 1,
     tapeRotation: -2.3, fontSizeMultiplier: 1, fontFamily: 'Space Mono',
@@ -435,7 +466,6 @@ export default function App() {
   const t = TRANSLATIONS[lang];
   const effectiveTintColor = folderColorOverride ?? dominantColor ?? null;
 
-  // Keep stateRef in sync — runs after every render, no extra re-renders
   useEffect(() => {
     stateRef.current = {
       label, labelStyle, tapeColor, tapeOpacity, tapeRotation,
@@ -499,7 +529,6 @@ export default function App() {
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < historyRef.current.length - 1;
 
-  // Seed initial snapshot once
   useEffect(() => {
     if (historyRef.current.length === 0) {
       historyRef.current = [makeSnapshot(stateRef.current)];
@@ -508,13 +537,39 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced push for sliders
   const pushDebounced = useCallback((key, snap) => {
     if (sliderDebounceRef.current[key]) clearTimeout(sliderDebounceRef.current[key]);
     sliderDebounceRef.current[key] = setTimeout(() => { pushHistory(snap); }, 600);
   }, [pushHistory]);
 
-  // ─── Keyboard shortcuts ─────────────────────────────────────────────────────
+  // ─── Preset actions ──────────────────────────────────────────────────────────
+
+  const handleSavePreset = () => {
+    const name = presetName.trim() || `Preset ${presets.length + 1}`;
+    const newPreset = {
+      id: Date.now(),
+      name,
+      ...makeSnapshot(stateRef.current),
+    };
+    const updated = [...presets, newPreset];
+    setPresets(updated);
+    savePresetsToStorage(updated);
+    setPresetName('');
+  };
+
+  const handleApplyPreset = (preset) => {
+    const { id, name, ...snap } = preset;
+    applySnapshot(snap);
+    pushHistory(makeSnapshot(snap));
+  };
+
+  const handleDeletePreset = (id) => {
+    const updated = presets.filter(p => p.id !== id);
+    setPresets(updated);
+    savePresetsToStorage(updated);
+  };
+
+  // ─── Keyboard shortcuts ──────────────────────────────────────────────────────
 
   useEffect(() => {
     const handler = (e) => {
@@ -526,8 +581,6 @@ export default function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [undo, redo]);
-
-  // ──────────────────────────────────────────────────────────────
 
   const switchLang = (l) => { setLang(l); try { localStorage.setItem('fis_lang', l); } catch {} };
 
@@ -631,7 +684,6 @@ export default function App() {
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
   };
 
-  // ─── handlePointerUp: reads from stateRef — no functional setters, no black canvas ───
   const handlePointerUp = useCallback((e) => {
     const wasTarget = draggingRef.current;
     draggingRef.current = null;
@@ -743,60 +795,17 @@ export default function App() {
 
   // ─── Wrappers con history ────────────────────────────────────────────────────
 
-  const setLabelWithHistory = (v) => {
-    setLabel(v);
-    pushDebounced('label', makeSnapshot({ ...stateRef.current, label: v }));
-  };
-
-  const setLabelStyleWithHistory = (v) => {
-    setLabelStyle(v);
-    pushHistory(makeSnapshot({ ...stateRef.current, labelStyle: v }));
-  };
-
-  const setTapeColorWithHistory = (v) => {
-    setTapeColor(v);
-    pushHistory(makeSnapshot({ ...stateRef.current, tapeColor: v }));
-  };
-
-  const setTapeOpacityWithHistory = (v) => {
-    setTapeOpacity(v);
-    pushDebounced('opacity', makeSnapshot({ ...stateRef.current, tapeOpacity: v }));
-  };
-
-  const setTapeRotationWithHistory = (v) => {
-    setTapeRotation(v);
-    pushDebounced('tapeRotation', makeSnapshot({ ...stateRef.current, tapeRotation: v }));
-  };
-
-  const setFontSizeMultiplierWithHistory = (v) => {
-    setFontSizeMultiplier(v);
-    pushDebounced('fontSize', makeSnapshot({ ...stateRef.current, fontSizeMultiplier: v }));
-  };
-
-  const setFontFamilyWithHistory = (v) => {
-    setFontFamily(v);
-    pushHistory(makeSnapshot({ ...stateRef.current, fontFamily: v }));
-  };
-
-  const setBadgeSizeWithHistory = (v) => {
-    setBadgeSize(v);
-    pushDebounced('badgeSize', makeSnapshot({ ...stateRef.current, badgeSize: v }));
-  };
-
-  const setFolderColorOverrideWithHistory = (v) => {
-    setFolderColorOverride(v);
-    pushHistory(makeSnapshot({ ...stateRef.current, folderColorOverride: v }));
-  };
-
-  const setCoverScaleWithHistory = (v) => {
-    setCoverScale(v);
-    pushDebounced('coverScale', makeSnapshot({ ...stateRef.current, coverScale: v }));
-  };
-
-  const setCoverRotationWithHistory = (v) => {
-    setCoverRotation(v);
-    pushDebounced('coverRotation', makeSnapshot({ ...stateRef.current, coverRotation: v }));
-  };
+  const setLabelWithHistory = (v) => { setLabel(v); pushDebounced('label', makeSnapshot({ ...stateRef.current, label: v })); };
+  const setLabelStyleWithHistory = (v) => { setLabelStyle(v); pushHistory(makeSnapshot({ ...stateRef.current, labelStyle: v })); };
+  const setTapeColorWithHistory = (v) => { setTapeColor(v); pushHistory(makeSnapshot({ ...stateRef.current, tapeColor: v })); };
+  const setTapeOpacityWithHistory = (v) => { setTapeOpacity(v); pushDebounced('opacity', makeSnapshot({ ...stateRef.current, tapeOpacity: v })); };
+  const setTapeRotationWithHistory = (v) => { setTapeRotation(v); pushDebounced('tapeRotation', makeSnapshot({ ...stateRef.current, tapeRotation: v })); };
+  const setFontSizeMultiplierWithHistory = (v) => { setFontSizeMultiplier(v); pushDebounced('fontSize', makeSnapshot({ ...stateRef.current, fontSizeMultiplier: v })); };
+  const setFontFamilyWithHistory = (v) => { setFontFamily(v); pushHistory(makeSnapshot({ ...stateRef.current, fontFamily: v })); };
+  const setBadgeSizeWithHistory = (v) => { setBadgeSize(v); pushDebounced('badgeSize', makeSnapshot({ ...stateRef.current, badgeSize: v })); };
+  const setFolderColorOverrideWithHistory = (v) => { setFolderColorOverride(v); pushHistory(makeSnapshot({ ...stateRef.current, folderColorOverride: v })); };
+  const setCoverScaleWithHistory = (v) => { setCoverScale(v); pushDebounced('coverScale', makeSnapshot({ ...stateRef.current, coverScale: v })); };
+  const setCoverRotationWithHistory = (v) => { setCoverRotation(v); pushDebounced('coverRotation', makeSnapshot({ ...stateRef.current, coverRotation: v })); };
 
   return (
     <div className="flex flex-col lg:flex-row h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-hidden">
@@ -821,6 +830,7 @@ export default function App() {
           </div>
 
           <div className="p-6 lg:p-8 flex flex-col gap-6 lg:gap-8">
+            {/* ── SECTION 1: Grafica ── */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
                 <LucideImage size={16} /> {t.section1}
@@ -906,6 +916,7 @@ export default function App() {
 
             <hr className="border-white/5" />
 
+            {/* ── SECTION 2: Etichetta ── */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
                 <Type size={16} /> {t.section2}
@@ -1051,13 +1062,80 @@ export default function App() {
                 </>
               )}
             </section>
+
+            <hr className="border-white/5" />
+
+            {/* ── SECTION 3: Preset ── */}
+            <section className="space-y-4 pb-2">
+              <button
+                onClick={() => setPresetsOpen(o => !o)}
+                className="w-full flex items-center justify-between text-sm font-semibold tracking-wide text-neutral-300 uppercase"
+              >
+                <span className="flex items-center gap-2"><Bookmark size={16} /> {t.section3}</span>
+                <ChevronDown size={15} className={`transition-transform text-neutral-500 ${presetsOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {presetsOpen && (
+                <div className="space-y-3">
+                  {/* Save row */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={presetName}
+                      onChange={e => setPresetName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
+                      placeholder={t.presetNamePlaceholder}
+                      maxLength={30}
+                      className="flex-1 bg-[#09090b] border border-neutral-700/50 rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all placeholder:text-neutral-600"
+                    />
+                    <button
+                      onClick={handleSavePreset}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-blue-500/60 hover:text-blue-300 transition-all text-xs font-medium shrink-0"
+                    >
+                      <BookmarkPlus size={14} /> {t.savePreset}
+                    </button>
+                  </div>
+
+                  {/* Preset list */}
+                  {presets.length === 0 ? (
+                    <p className="text-xs text-neutral-600 text-center py-3">{t.noPresets}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {presets.map(preset => (
+                        <div key={preset.id}
+                          className="flex items-center gap-2 bg-[#09090b] border border-neutral-800/60 rounded-xl px-3 py-2.5 group">
+                          {/* Color swatch */}
+                          <div className="w-4 h-4 rounded-full shrink-0 border border-white/10"
+                            style={{ backgroundColor: preset.tapeColor }} />
+                          {/* Name */}
+                          <span className="flex-1 text-xs text-neutral-300 font-mono truncate">{preset.name}</span>
+                          {/* Style pill */}
+                          <span className="text-[10px] text-neutral-600 shrink-0 hidden group-hover:inline">
+                            {preset.labelStyle}
+                          </span>
+                          {/* Actions */}
+                          <button
+                            onClick={() => handleApplyPreset(preset)}
+                            className="text-[11px] text-blue-400 hover:text-blue-300 font-medium transition-colors shrink-0 px-1">
+                            {t.applyPreset}
+                          </button>
+                          <button
+                            onClick={() => handleDeletePreset(preset.id)}
+                            className="text-neutral-700 hover:text-red-400 transition-colors shrink-0">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
           </div>
         </div>
 
-        {/* Footer sticky — frosted glass con fade gradient in cima */}
+        {/* Footer sticky */}
         <div className="sidebar-footer shrink-0 p-6 lg:p-8 pt-5 bg-[#121214]">
-
-          {/* Undo / Redo */}
           <div className="flex gap-2 mb-4">
             <button onClick={undo} disabled={!canUndo} title={`${t.undo} (Cmd+Z)`}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-medium transition-all ${
