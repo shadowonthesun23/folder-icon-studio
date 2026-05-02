@@ -638,8 +638,6 @@ export default function App() {
     updateCursor(false);
     if (e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId);
     if (wasTarget) {
-      // stateRef is updated by useEffect after the move setState calls settle.
-      // We wait one frame so the effect has run with the final position values.
       requestAnimationFrame(() => {
         pushHistory(makeSnapshot(stateRef.current));
       });
@@ -1056,8 +1054,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Footer sticky */}
-        <div className="shrink-0 p-6 lg:p-8 pt-4 border-t border-white/5 bg-[#121214]">
+        {/* Footer sticky — frosted glass con fade gradient in cima */}
+        <div className="sidebar-footer shrink-0 p-6 lg:p-8 pt-5 bg-[#121214]">
 
           {/* Undo / Redo */}
           <div className="flex gap-2 mb-4">
@@ -1125,6 +1123,25 @@ export default function App() {
           .custom-scrollbar::-webkit-scrollbar { width: 6px; }
           .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
           .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.1); border-radius: 10px; }
+          /* ── Frosted footer ─────────────────────────────── */
+          .sidebar-footer {
+            position: relative;
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            background: rgba(18, 18, 20, 0.82);
+            border-top: 1px solid rgba(255,255,255,0.06);
+          }
+          .sidebar-footer::before {
+            content: '';
+            position: absolute;
+            top: -48px;
+            left: 0;
+            right: 0;
+            height: 48px;
+            pointer-events: none;
+            background: linear-gradient(to bottom, transparent, rgba(18,18,20,0.82));
+          }
+          /* ───────────────────────────────────────────────── */
           .liquid-glass-btn {
             position: relative; overflow: hidden; color: rgba(255,255,255,0.92); font-weight: 500;
             background: linear-gradient(145deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.10) 100%);
