@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X } from 'lucide-react';
+import { Upload, Download, Type, Image as LucideImage, ZoomIn, Palette, Check, Move, RotateCw, Droplet, Coffee, RotateCcw, X, ChevronDown } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 
 const TRANSLATIONS = {
@@ -27,7 +27,10 @@ const TRANSLATIONS = {
     colorTape: 'Colore Nastro',
     colorBanner: 'Colore Fascia',
     opacity: 'Opacit\u00e0',
-    download: 'Scarica PNG (1024x1024)',
+    download: 'Scarica',
+    downloadPng: 'PNG 1024×1024',
+    downloadIcns: 'ICNS (macOS)',
+    downloadIco: 'ICO (Windows)',
     uploadHint: "Carica un\u2019immagine per iniziare",
     dragCanvasHint: 'Clicca e trascina per posizionare',
     customColor: 'Colore personalizzato',
@@ -58,7 +61,10 @@ const TRANSLATIONS = {
     colorTape: 'Tape Color',
     colorBanner: 'Banner Color',
     opacity: 'Opacity',
-    download: 'Download PNG (1024x1024)',
+    download: 'Download',
+    downloadPng: 'PNG 1024×1024',
+    downloadIcns: 'ICNS (macOS)',
+    downloadIco: 'ICO (Windows)',
     uploadHint: 'Upload an image to get started',
     dragCanvasHint: 'Click and drag to position',
     customColor: 'Custom color',
@@ -176,6 +182,135 @@ const loadSvgAsImage = (svgString) => new Promise((resolve, reject) => {
   img.src = url;
 });
 
+// ─── Export helpers ──────────────────────────────────────────────────────────
+
+/** Ritorna un canvas ridimensionato a `size`x`size` */
+const resizeCanvas = (source, size) => {
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  c.getContext('2d').drawImage(source, 0, 0, size, size);
+  return c;
+};
+
+/** Ritorna una Promise<Blob> PNG dal canvas a `size`x`size` */
+const canvasToPngBlob = (source, size) => new Promise((resolve) => {
+  resizeCanvas(source, size).toBlob(resolve, 'image/png');
+});
+
+/**
+ * Costruisce il binario ICNS con chunk retina completi.
+ * Specifiche chunk OSType:
+ *   icp4=16, icp5=32, icp6=64, ic07=128, ic08=256, ic09=512, ic10=1024
+ *   ic11=16@2x(32), ic12=32@2x(64), ic13=128@2x(256), ic14=256@2x(512)
+ */
+const buildIcns = async (canvas) => {
+  const CHUNKS = [
+    { ostype: 'icp4', size: 16 },
+    { ostype: 'icp5', size: 32 },
+    { ostype: 'icp6', size: 64 },
+    { ostype: 'ic07', size: 128 },
+    { ostype: 'ic08', size: 256 },
+    { ostype: 'ic09', size: 512 },
+    { ostype: 'ic10', size: 1024 },
+    { ostype: 'ic11', size: 32 },   // 16@2x
+    { ostype: 'ic12', size: 64 },   // 32@2x
+    { ostype: 'ic13', size: 256 },  // 128@2x
+    { ostype: 'ic14', size: 512 },  // 256@2x
+  ];
+
+  // Cache PNG per dimensione per evitare di generare duplicati
+  const pngCache = {};
+  const getPng = async (size) => {
+    if (!pngCache[size]) {
+      const blob = await canvasToPngBlob(canvas, size);
+      pngCache[size] = new Uint8Array(await blob.arrayBuffer());
+    }
+    return pngCache[size];
+  };
+
+  const chunkBuffers = await Promise.all(
+    CHUNKS.map(async ({ ostype, size }) => {
+      const pngData = await getPng(size);
+      // Ogni chunk: 4 byte ostype + 4 byte length (header 8 + data) + data
+      const chunkLen = 8 + pngData.length;
+      const buf = new Uint8Array(chunkLen);
+      // OSType ASCII
+      for (let i = 0; i < 4; i++) buf[i] = ostype.charCodeAt(i);
+      // Length big-endian uint32
+      const dv = new DataView(buf.buffer);
+      dv.setUint32(4, chunkLen, false);
+      buf.set(pngData, 8);
+      return buf;
+    })
+  );
+
+  const totalDataLen = chunkBuffers.reduce((s, b) => s + b.length, 0);
+  const icnsLen = 8 + totalDataLen; // 4 magic + 4 total length + chunks
+  const icns = new Uint8Array(icnsLen);
+  const dv = new DataView(icns.buffer);
+
+  // Magic: 'icns'
+  icns[0] = 0x69; icns[1] = 0x63; icns[2] = 0x6E; icns[3] = 0x73;
+  dv.setUint32(4, icnsLen, false);
+
+  let offset = 8;
+  for (const chunk of chunkBuffers) {
+    icns.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  return new Blob([icns], { type: 'image/x-icns' });
+};
+
+/**
+ * Costruisce un ICO multi-res (16/32/48/64/128/256).
+ * Formato ICO: header + directory entries + PNG data.
+ * I PNG > 256px non sono supportati dallo spec ICO, quindi usiamo max 256.
+ */
+const buildIco = async (canvas) => {
+  const SIZES = [16, 32, 48, 64, 128, 256];
+  const pngBlobs = await Promise.all(SIZES.map(s => canvasToPngBlob(canvas, s)));
+  const pngBuffers = await Promise.all(pngBlobs.map(b => b.arrayBuffer().then(ab => new Uint8Array(ab))));
+
+  // ICO header: 6 bytes
+  // Directory entries: 16 bytes each
+  // PNG data follows
+  const headerSize = 6;
+  const dirEntrySize = 16;
+  const dirSize = dirEntrySize * SIZES.length;
+  const totalSize = headerSize + dirSize + pngBuffers.reduce((s, b) => s + b.length, 0);
+
+  const buf = new ArrayBuffer(totalSize);
+  const dv = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+
+  // ICO header
+  dv.setUint16(0, 0, true);       // reserved
+  dv.setUint16(2, 1, true);       // type: 1 = ICO
+  dv.setUint16(4, SIZES.length, true); // count
+
+  let dataOffset = headerSize + dirSize;
+  SIZES.forEach((size, i) => {
+    const png = pngBuffers[i];
+    const entryBase = headerSize + i * dirEntrySize;
+    // Width/Height: 0 = 256
+    u8[entryBase + 0] = size === 256 ? 0 : size;
+    u8[entryBase + 1] = size === 256 ? 0 : size;
+    u8[entryBase + 2] = 0; // color count
+    u8[entryBase + 3] = 0; // reserved
+    dv.setUint16(entryBase + 4, 1, true);  // planes
+    dv.setUint16(entryBase + 6, 32, true); // bit count
+    dv.setUint32(entryBase + 8, png.length, true);
+    dv.setUint32(entryBase + 12, dataOffset, true);
+    u8.set(png, dataOffset);
+    dataOffset += png.length;
+  });
+
+  return new Blob([buf], { type: 'image/x-icon' });
+};
+
+// ─── Canvas drawing helpers ──────────────────────────────────────────────────
+
 const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, tapeRotationDeg, fontSizeMultiplier, fontFamily) => {
   const tapeW = w * 0.55;
   const tapeH = h * 0.12;
@@ -289,6 +424,7 @@ const IconInstagram = ({ size = 16, className = '' }) => (
 export default function App() {
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
+  const downloadMenuRef = useRef(null);
   const [baseImgData, setBaseImgData] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
   const [coverImg, setCoverImg] = useState(null);
@@ -307,6 +443,8 @@ export default function App() {
   const [coverScale, setCoverScale] = useState(1);
   const [coverRotation, setCoverRotation] = useState(0);
   const [tapeOffset, setTapeOffset] = useState({ x: 0, y: 0 });
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const draggingRef = useRef(null);
   const dragStartPosRef = useRef({ x: 0, y: 0 });
   const folderColorInputRef = useRef(null);
@@ -323,8 +461,19 @@ export default function App() {
     try { localStorage.setItem('fis_lang', l); } catch {}
   };
 
+  // Chiude il menu download cliccando fuori
+  useEffect(() => {
+    if (!downloadMenuOpen) return;
+    const handler = (e) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) {
+        setDownloadMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [downloadMenuOpen]);
+
   const handleClearImage = () => {
-    // Revoca il blob URL precedente per evitare memory leak
     if (coverSrc && coverSrc.startsWith('blob:')) URL.revokeObjectURL(coverSrc);
     setCoverSrc(null);
     setCoverImg(null);
@@ -360,33 +509,22 @@ export default function App() {
   }, [folderShape]);
 
   useEffect(() => {
-    if (!coverSrc) {
-      setCoverImg(null);
-      return;
-    }
+    if (!coverSrc) { setCoverImg(null); return; }
     setCoverImg(null);
     const img = new Image();
     img.onload = () => setCoverImg(img);
     img.src = coverSrc;
   }, [coverSrc]);
 
-  // FIX: usa URL.createObjectURL invece di FileReader
-  // → ogni upload genera un blob URL univoco, React vede sempre coverSrc cambiato
-  // → e.target.value = '' resetta l'input per permettere di ricaricare lo stesso file
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    // Revoca il blob URL precedente
     if (coverSrc && coverSrc.startsWith('blob:')) URL.revokeObjectURL(coverSrc);
-
     const objectUrl = URL.createObjectURL(file);
     setCoverSrc(objectUrl);
     setCoverOffset({ x: 0, y: 0 });
     setCoverScale(1);
     setCoverRotation(0);
-
-    // Estrai colore dominante
     const img = new Image();
     img.onload = () => {
       const c = document.createElement('canvas');
@@ -400,8 +538,6 @@ export default function App() {
       setDominantColor(rgbToHex(Math.round(r/n), Math.round(g/n), Math.round(b/n)));
     };
     img.src = objectUrl;
-
-    // Resetta il valore dell'input: permette di selezionare lo stesso file di nuovo
     e.target.value = '';
   };
 
@@ -464,8 +600,7 @@ export default function App() {
 
       if (shape.tintFolder && effectiveTintColor) {
         const offscreen = document.createElement('canvas');
-        offscreen.width = w;
-        offscreen.height = h;
+        offscreen.width = w; offscreen.height = h;
         const offCtx = offscreen.getContext('2d');
         offCtx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
         offCtx.globalCompositeOperation = 'color';
@@ -526,14 +661,52 @@ export default function App() {
     render();
   }, [baseImgData, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
-  const handleDownload = () => {
+  const getFileName = () => (label.trim() === '' ? 'icon' : label).replace(/\s+/g, '_').toLowerCase();
+
+  const handleDownloadPng = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const name = label.trim() === '' ? 'icon' : label;
     const link = document.createElement('a');
-    link.download = `folder_${name.replace(/\s+/g, '_').toLowerCase()}.png`;
+    link.download = `folder_${getFileName()}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
+    setDownloadMenuOpen(false);
+  };
+
+  const handleDownloadIcns = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    setIsExporting(true);
+    setDownloadMenuOpen(false);
+    try {
+      const blob = await buildIcns(canvas);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `folder_${getFileName()}.icns`;
+      link.href = url;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDownloadIco = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    setIsExporting(true);
+    setDownloadMenuOpen(false);
+    try {
+      const blob = await buildIco(canvas);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `folder_${getFileName()}.ico`;
+      link.href = url;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const isPresetColor = TAPE_COLORS.some(c => c.hex === tapeColor);
@@ -813,9 +986,68 @@ export default function App() {
         </div>
 
         <div className="mt-auto p-6 lg:p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
-          <button onClick={handleDownload} className="liquid-glass-btn w-full font-medium py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 mb-6">
-            <Download size={18} /> {t.download}
-          </button>
+          {/* Download dropdown */}
+          <div ref={downloadMenuRef} className="relative w-full mb-6">
+            <div className="flex w-full">
+              <button
+                onClick={handleDownloadPng}
+                disabled={isExporting}
+                className="liquid-glass-btn flex-1 font-medium py-3.5 px-4 rounded-l-xl flex items-center justify-center gap-2"
+              >
+                {isExporting
+                  ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                  : <Download size={18} />
+                }
+                {t.download} PNG
+              </button>
+              <button
+                onClick={() => setDownloadMenuOpen(o => !o)}
+                disabled={isExporting}
+                className="liquid-glass-btn font-medium py-3.5 px-3 rounded-r-xl border-l border-white/10 flex items-center justify-center"
+                aria-label="Altre opzioni di download"
+              >
+                <ChevronDown size={16} className={`transition-transform ${downloadMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+
+            {downloadMenuOpen && (
+              <div className="absolute bottom-full mb-2 left-0 right-0 bg-[#1c1c1e] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50">
+                <button
+                  onClick={handleDownloadPng}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left"
+                >
+                  <Download size={15} className="text-neutral-400 shrink-0" />
+                  <div>
+                    <div className="font-medium">{t.downloadPng}</div>
+                    <div className="text-[11px] text-neutral-500">Universale, massima qualità</div>
+                  </div>
+                </button>
+                <div className="h-px bg-white/5" />
+                <button
+                  onClick={handleDownloadIcns}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left"
+                >
+                  <Download size={15} className="text-neutral-400 shrink-0" />
+                  <div>
+                    <div className="font-medium">{t.downloadIcns}</div>
+                    <div className="text-[11px] text-neutral-500">11 risoluzioni + Retina @2x</div>
+                  </div>
+                </button>
+                <div className="h-px bg-white/5" />
+                <button
+                  onClick={handleDownloadIco}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left"
+                >
+                  <Download size={15} className="text-neutral-400 shrink-0" />
+                  <div>
+                    <div className="font-medium">{t.downloadIco}</div>
+                    <div className="text-[11px] text-neutral-500">6 risoluzioni (16→256px)</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-col items-center gap-3 pt-6 border-t border-white/5">
             <span className="text-[10px] text-neutral-500 font-mono tracking-widest lowercase">made with love by antonello :)</span>
             <div className="flex items-center gap-5 text-neutral-400">
@@ -857,6 +1089,7 @@ export default function App() {
             box-shadow: 0 2px 0 rgba(255,255,255,0.16) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 12px 40px rgba(0,0,0,0.4), 0 1px 12px rgba(255,255,255,0.06);
           }
           .liquid-glass-btn:active { transform: scale(0.98); box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 4px 16px rgba(0,0,0,0.3); }
+          .liquid-glass-btn:disabled { opacity: 0.6; cursor: not-allowed; }
           @keyframes bounce-x { 0%,100% { transform: translateX(0); } 50% { transform: translateX(-6px); } }
           .animate-bounce-x { animation: bounce-x 1.8s ease-in-out infinite; }
         `}} />
