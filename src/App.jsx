@@ -111,29 +111,15 @@ const FOLDER_COLORS = [
   { id: 'gray', hex: '#8E8E93', name: 'Grigio' },
 ];
 
-// Dimensioni native di cassette-base.png (misurate da Photoshop)
+// Dimensioni native cassette-base.png
 const CASSETTE_PNG_W = 2183;
 const CASSETTE_PNG_H = 1417;
 
-// Area label misurata direttamente su cassette-base.png
+// Area label misurata su cassette-base.png (coordinate fornite dall'utente)
 const CASSETTE_LABEL_X = 135;
 const CASSETTE_LABEL_Y = 103;
 const CASSETTE_LABEL_W = 1909;
 const CASSETTE_LABEL_H = 929;
-
-// Helper: disegna una pillola (rettangolo con rx = h/2) su ctx
-const pillPath = (ctx, x, y, w, h) => {
-  const r = h / 2;
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.arcTo(x + w, y, x + w, y + r, r);
-  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-  ctx.lineTo(x + r, y + h);
-  ctx.arcTo(x, y + h, x, y + r, r);
-  ctx.arcTo(x, y, x + r, y, r);
-  ctx.closePath();
-};
 
 const FOLDERS = {
   classic: {
@@ -168,40 +154,22 @@ const FOLDERS = {
     id: 'cassette',
     name: 'Cassetta',
     tintFolder: false,
-    url: null,
     getFolderRect: (cw, ch) => {
       const pngRatio = CASSETTE_PNG_W / CASSETTE_PNG_H;
       let w, h, x, y;
       if (cw / ch > pngRatio) {
-        h = ch;
-        w = h * pngRatio;
-        x = (cw - w) / 2;
-        y = 0;
+        h = ch; w = h * pngRatio; x = (cw - w) / 2; y = 0;
       } else {
-        w = cw;
-        h = w / pngRatio;
-        x = 0;
-        y = (ch - h) / 2;
+        w = cw; h = w / pngRatio; x = 0; y = (ch - h) / 2;
       }
       return { x, y, w, h };
     },
     clipRect: {
-      x: CASSETTE_LABEL_X,
-      y: CASSETTE_LABEL_Y,
-      w: CASSETTE_LABEL_W,
-      h: CASSETTE_LABEL_H,
-      vw: CASSETTE_PNG_W,
-      vh: CASSETTE_PNG_H,
+      x: CASSETTE_LABEL_X, y: CASSETTE_LABEL_Y,
+      w: CASSETTE_LABEL_W, h: CASSETTE_LABEL_H,
+      vw: CASSETTE_PNG_W, vh: CASSETTE_PNG_H,
     },
-    buildFlapPath: (ctx, rect) => {
-      const sX = rect.w / CASSETTE_PNG_W;
-      const sY = rect.h / CASSETTE_PNG_H;
-      const x = rect.x + CASSETTE_LABEL_X * sX;
-      const y = rect.y + CASSETTE_LABEL_Y * sY;
-      const w = CASSETTE_LABEL_W * sX;
-      const h = CASSETTE_LABEL_H * sY;
-      pillPath(ctx, x, y, w, h);
-    },
+    buildFlapPath: () => {},
   }
 };
 
@@ -249,7 +217,7 @@ const loadPngAsImage = (url) => new Promise((resolve, reject) => {
   img.src = url;
 });
 
-// ─── Export helpers ──────────────────────────────────────────────────────────
+// ─── Export helpers ───────────────────────────────────────────────────────────
 
 const resizeCanvas = (source, size) => {
   let current = source;
@@ -331,7 +299,7 @@ const buildIco = async (canvas) => {
   return new Blob([buf], { type: 'image/x-icon' });
 };
 
-// ─── Canvas drawing helpers ──────────────────────────────────────────────────
+// ─── Canvas drawing helpers ───────────────────────────────────────────────────
 
 const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, tapeRotationDeg, fontSizeMultiplier, fontFamily) => {
   const tapeW = w * 0.55, tapeH = h * 0.12;
@@ -368,7 +336,6 @@ const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontSizeMult
   const rectW = clipRect.w * scaleX, rectH = clipRect.h * scaleY;
   const bannerH = rectH * 0.30, bannerY = rectY + rectH - bannerH;
   ctx.save();
-  shape.buildFlapPath(ctx, folderRect); ctx.clip();
   ctx.globalAlpha = opacity; ctx.fillStyle = tapeHex;
   ctx.fillRect(rectX, bannerY, rectW, bannerH);
   ctx.globalAlpha = 1;
@@ -437,13 +404,10 @@ const IconInstagram = ({ size = 16, className = '' }) => (
   </svg>
 );
 
-// ─── Preset helpers ──────────────────────────────────────────────────────────
+// ─── Preset helpers ───────────────────────────────────────────────────────────
 
 const loadPresetsFromStorage = () => {
-  try {
-    const raw = localStorage.getItem(LS_PRESETS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  try { const raw = localStorage.getItem(LS_PRESETS_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
 };
 
 const savePresetsToStorage = (presets) => {
@@ -458,8 +422,7 @@ const captureThumbnail = (canvas) => {
     const thumb = document.createElement('canvas');
     thumb.width = 48; thumb.height = 48;
     const ctx = thumb.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(canvas, 0, 0, 48, 48);
     return thumb.toDataURL('image/png');
   } catch { return null; }
@@ -472,6 +435,7 @@ export default function App() {
   const [baseImgData, setBaseImgData] = useState(null);
   const [cassetteBaseImg, setCassetteBaseImg] = useState(null);
   const [cassetteOverlayImg, setCassetteOverlayImg] = useState(null);
+  const [cassetteMaskImg, setCassetteMaskImg] = useState(null);
   const [coverSrc, setCoverSrc] = useState(null);
   const [coverImg, setCoverImg] = useState(null);
   const [label, setLabel] = useState('Archivio 01');
@@ -503,13 +467,11 @@ export default function App() {
   const sliderDebounceRef = useRef({});
   const isRestoringRef = useRef(false);
 
-  // ─── Preset state ────────────────────────────────────────────────────────────
   const [presets, setPresets] = useState(() => loadPresetsFromStorage());
   const [presetName, setPresetName] = useState('');
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [section3HintVisible, setSection3HintVisible] = useState(false);
 
-  // ─── stateRef: always-current snapshot ──────────────────────────────────────
   const stateRef = useRef({
     label: 'Archivio 01', labelStyle: 'dymo', tapeColor: '#f4ebd0', tapeOpacity: 1,
     tapeRotation: -2.3, fontSizeMultiplier: 1, fontFamily: 'Space Mono',
@@ -532,8 +494,6 @@ export default function App() {
     };
   });
 
-  // ─── History core ──────────────────────────────────────────────────────────
-
   const pushHistory = useCallback((snap) => {
     if (isRestoringRef.current) return;
     const stack = historyRef.current;
@@ -548,19 +508,11 @@ export default function App() {
 
   const applySnapshot = useCallback((snap) => {
     isRestoringRef.current = true;
-    setLabel(snap.label);
-    setLabelStyle(snap.labelStyle);
-    setTapeColor(snap.tapeColor);
-    setTapeOpacity(snap.tapeOpacity);
-    setTapeRotation(snap.tapeRotation);
-    setFontSizeMultiplier(snap.fontSizeMultiplier);
-    setFontFamily(snap.fontFamily);
-    setTapeOffset(snap.tapeOffset);
-    setBadgeOffset(snap.badgeOffset);
-    setBadgeSize(snap.badgeSize);
-    setCoverOffset(snap.coverOffset);
-    setCoverScale(snap.coverScale);
-    setCoverRotation(snap.coverRotation);
+    setLabel(snap.label); setLabelStyle(snap.labelStyle); setTapeColor(snap.tapeColor);
+    setTapeOpacity(snap.tapeOpacity); setTapeRotation(snap.tapeRotation);
+    setFontSizeMultiplier(snap.fontSizeMultiplier); setFontFamily(snap.fontFamily);
+    setTapeOffset(snap.tapeOffset); setBadgeOffset(snap.badgeOffset); setBadgeSize(snap.badgeSize);
+    setCoverOffset(snap.coverOffset); setCoverScale(snap.coverScale); setCoverRotation(snap.coverRotation);
     setFolderColorOverride(snap.folderColorOverride);
     setTimeout(() => { isRestoringRef.current = false; }, 0);
   }, []);
@@ -569,8 +521,7 @@ export default function App() {
     const idx = historyIndexRef.current;
     if (idx <= 0) return;
     const newIdx = idx - 1;
-    historyIndexRef.current = newIdx;
-    setHistoryIndex(newIdx);
+    historyIndexRef.current = newIdx; setHistoryIndex(newIdx);
     applySnapshot(historyRef.current[newIdx]);
   }, [applySnapshot]);
 
@@ -579,8 +530,7 @@ export default function App() {
     const stack = historyRef.current;
     if (idx >= stack.length - 1) return;
     const newIdx = idx + 1;
-    historyIndexRef.current = newIdx;
-    setHistoryIndex(newIdx);
+    historyIndexRef.current = newIdx; setHistoryIndex(newIdx);
     applySnapshot(stack[newIdx]);
   }, [applySnapshot]);
 
@@ -600,36 +550,23 @@ export default function App() {
     sliderDebounceRef.current[key] = setTimeout(() => { pushHistory(snap); }, 600);
   }, [pushHistory]);
 
-  // ─── Preset actions ──────────────────────────────────────────────────────────
-
   const handleSavePreset = () => {
     const name = presetName.trim() || `Stile ${presets.length + 1}`;
     const thumbnail = captureThumbnail(canvasRef.current);
-    const newPreset = {
-      id: Date.now(),
-      name,
-      thumbnail,
-      ...makeSnapshot(stateRef.current),
-    };
+    const newPreset = { id: Date.now(), name, thumbnail, ...makeSnapshot(stateRef.current) };
     const updated = [...presets, newPreset];
-    setPresets(updated);
-    savePresetsToStorage(updated);
-    setPresetName('');
+    setPresets(updated); savePresetsToStorage(updated); setPresetName('');
   };
 
   const handleApplyPreset = (preset) => {
     const { id, name, thumbnail, ...snap } = preset;
-    applySnapshot(snap);
-    pushHistory(makeSnapshot(snap));
+    applySnapshot(snap); pushHistory(makeSnapshot(snap));
   };
 
   const handleDeletePreset = (id) => {
     const updated = presets.filter(p => p.id !== id);
-    setPresets(updated);
-    savePresetsToStorage(updated);
+    setPresets(updated); savePresetsToStorage(updated);
   };
-
-  // ─── Keyboard shortcuts ──────────────────────────────────────────────────────
 
   useEffect(() => {
     const handler = (e) => {
@@ -674,27 +611,36 @@ export default function App() {
     document.head.appendChild(link);
   }, []);
 
-  // ─── Load folder base image (SVG o PNG cassette) ──────────────────────────
+  // ─── Load SVG folder ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const shape = FOLDERS[folderShape];
     setBaseImgData(null);
-    if (folderShape === 'cassette') {
-      return;
-    }
-    loadSvgAsImage(shape.svg).then(img => setBaseImgData(img)).catch(err => console.error('Folder load error:', err));
+    if (folderShape === 'cassette') return;
+    loadSvgAsImage(FOLDERS[folderShape].svg)
+      .then(img => setBaseImgData(img))
+      .catch(err => console.error('Folder load error:', err));
   }, [folderShape]);
 
-  // ─── Load cassette PNGs ──────────────────────────────────────────────────────
+  // ─── Load cassette assets (base + overlay + maschera) ─────────────────────────
   useEffect(() => {
     if (folderShape !== 'cassette') return;
-    setCassetteBaseImg(null);
-    setCassetteOverlayImg(null);
+    setCassetteBaseImg(null); setCassetteOverlayImg(null); setCassetteMaskImg(null);
     Promise.all([
       loadPngAsImage('/cassette-base.png'),
       loadPngAsImage('/cassette-overlay.png'),
-    ]).then(([base, overlay]) => {
+      // maschera.svg caricata come immagine: il browser la renderizza con l'alpha corretta
+      new Promise((resolve, reject) => {
+        const img = new Image();
+        // forziamo width/height per garantire dimensioni note al momento del drawImage
+        img.width = CASSETTE_LABEL_W;
+        img.height = CASSETTE_LABEL_H;
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('maschera.svg load failed'));
+        img.src = '/maschera.svg';
+      }),
+    ]).then(([base, overlay, mask]) => {
       setCassetteBaseImg(base);
       setCassetteOverlayImg(overlay);
+      setCassetteMaskImg(mask);
     }).catch(err => console.error('Cassette asset load error:', err));
   }, [folderShape]);
 
@@ -767,22 +713,19 @@ export default function App() {
     draggingRef.current = null;
     updateCursor(false);
     if (e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId);
-    if (wasTarget) {
-      requestAnimationFrame(() => {
-        pushHistory(makeSnapshot(stateRef.current));
-      });
-    }
+    if (wasTarget) requestAnimationFrame(() => pushHistory(makeSnapshot(stateRef.current)));
   }, [pushHistory]);
 
-  // ─── Main render ──────────────────────────────────────────────────────────
+  // ─── Main render ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     if (folderShape === 'cassette') {
-      if (!cassetteBaseImg) return;
+      if (!cassetteBaseImg || !cassetteMaskImg) return;
     } else {
       if (!baseImgData) return;
     }
+
     const ctx = canvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
     const shape = FOLDERS[folderShape];
@@ -791,41 +734,59 @@ export default function App() {
     ctx.clearRect(0, 0, w, h);
 
     if (folderShape === 'cassette') {
-      // 1. Base cassetta
+      // 1. Base
       ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
 
-      // 2. Immagine utente ritagliata con pillPath sulle coordinate misurate
+      // 2. Immagine utente mascherata con destination-in su canvas offscreen
       if (coverImg) {
-        const { clipRect } = shape;
-        const sX = folderRect.w / clipRect.vw;
-        const sY = folderRect.h / clipRect.vh;
-        const rectX = folderRect.x + clipRect.x * sX;
-        const rectY = folderRect.y + clipRect.y * sY;
-        const rectW = clipRect.w * sX;
-        const rectH = clipRect.h * sY;
+        // Coordinate dell'area label in pixel-canvas
+        const sX = folderRect.w / CASSETTE_PNG_W;
+        const sY = folderRect.h / CASSETTE_PNG_H;
+        const rectX = folderRect.x + CASSETTE_LABEL_X * sX;
+        const rectY = folderRect.y + CASSETTE_LABEL_Y * sY;
+        const rectW = CASSETTE_LABEL_W * sX;
+        const rectH = CASSETTE_LABEL_H * sY;
 
+        // Calcolo dimensioni/posizione immagine utente (cover-fit + scala + offset + rotazione)
         const imgRatio = coverImg.width / coverImg.height;
-        const canvasRatio = rectW / rectH;
+        const areaRatio = rectW / rectH;
         let drawW, drawH;
-        if (imgRatio > canvasRatio) { drawH = rectH * coverScale; drawW = drawH * imgRatio; }
+        if (imgRatio > areaRatio) { drawH = rectH * coverScale; drawW = drawH * imgRatio; }
         else { drawW = rectW * coverScale; drawH = drawW / imgRatio; }
-        const drawX = rectX + (rectW - drawW) / 2 + coverOffset.x;
-        const drawY = rectY + (rectH - drawH) / 2 + coverOffset.y;
+        const drawX = (rectW - drawW) / 2 + coverOffset.x;
+        const drawY = (rectH - drawH) / 2 + coverOffset.y;
 
-        ctx.save();
-        pillPath(ctx, rectX, rectY, rectW, rectH);
-        ctx.clip();
-        ctx.translate(drawX + drawW / 2, drawY + drawH / 2);
-        ctx.rotate((coverRotation * Math.PI) / 180);
-        ctx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
-        ctx.drawImage(coverImg, drawX, drawY, drawW, drawH);
-        ctx.restore();
+        // Offscreen esattamente delle dimensioni dell'area label
+        const off = document.createElement('canvas');
+        off.width = Math.round(rectW);
+        off.height = Math.round(rectH);
+        const offCtx = off.getContext('2d');
+        offCtx.imageSmoothingEnabled = true;
+        offCtx.imageSmoothingQuality = 'high';
+
+        // 2a. Disegna immagine utente sull'offscreen
+        offCtx.save();
+        offCtx.translate(drawX + drawW / 2, drawY + drawH / 2);
+        offCtx.rotate((coverRotation * Math.PI) / 180);
+        offCtx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
+        offCtx.drawImage(coverImg, drawX, drawY, drawW, drawH);
+        offCtx.restore();
+
+        // 2b. Applica maschera SVG con destination-in
+        // La maschera SVG ha viewBox="0 0 1909 927.5", scalata esattamente su rectW x rectH
+        offCtx.globalCompositeOperation = 'destination-in';
+        offCtx.drawImage(cassetteMaskImg, 0, 0, off.width, off.height);
+        offCtx.globalCompositeOperation = 'source-over';
+
+        // 2c. Copia offscreen sul canvas principale alla posizione corretta
+        ctx.drawImage(off, rectX, rectY);
       }
 
       // 3. Overlay sopra tutto
       if (cassetteOverlayImg) {
         ctx.drawImage(cassetteOverlayImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
+
     } else {
       // Pipeline standard (classic)
       if (shape.tintFolder && effectiveTintColor) {
@@ -871,19 +832,18 @@ export default function App() {
       }
     }
 
-    // Etichette (comuni a tutti gli stili)
+    // Etichette
     if (label.trim() !== '') {
       if (labelStyle === 'dymo') drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
       else if (labelStyle === 'banner') drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
       else if (labelStyle === 'badge') drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
     }
-  }, [baseImgData, cassetteBaseImg, cassetteOverlayImg, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, cassetteBaseImg, cassetteOverlayImg, cassetteMaskImg, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
   const getFileName = () => (label.trim() === '' ? 'icon' : label).replace(/\s+/g, '_').toLowerCase();
 
   const handleDownloadPng = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const canvas = canvasRef.current; if (!canvas) return;
     const link = document.createElement('a');
     link.download = `folder_${getFileName()}.png`;
     link.href = canvas.toDataURL('image/png');
@@ -916,8 +876,6 @@ export default function App() {
 
   const isPresetColor = TAPE_COLORS.some(c => c.hex === tapeColor);
   const isCustomFolderColor = folderColorOverride !== null && !FOLDER_COLORS.slice(1).some(c => c.hex === folderColorOverride);
-
-  // ─── Wrappers con history ────────────────────────────────────────────────────
 
   const setLabelWithHistory = (v) => { setLabel(v); pushDebounced('label', makeSnapshot({ ...stateRef.current, label: v })); };
   const setLabelStyleWithHistory = (v) => { setLabelStyle(v); pushHistory(makeSnapshot({ ...stateRef.current, labelStyle: v })); };
@@ -954,25 +912,18 @@ export default function App() {
           </div>
 
           <div className="p-6 lg:p-8 flex flex-col gap-6 lg:gap-8">
-            {/* ── SECTION 1: Grafica ── */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
                 <LucideImage size={16} /> {t.section1}
               </h2>
-
-              {/* ── Folder style selector ── */}
               <div className="space-y-2">
                 <label className="text-xs text-neutral-500">{t.folderStyle}</label>
                 <div className="flex gap-2">
                   {Object.values(FOLDERS).map(f => (
                     <button key={f.id} onClick={() => setFolderShape(f.id)}
                       className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
-                        folderShape === f.id
-                          ? 'border-blue-500 bg-blue-500/10 text-blue-300'
-                          : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                      }`}>
-                      {f.name}
-                    </button>
+                        folderShape === f.id ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                      }`}>{f.name}</button>
                   ))}
                 </div>
               </div>
@@ -1024,7 +975,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Colore cartella — solo per stili che lo supportano */}
               {FOLDERS[folderShape].tintFolder && (
                 <div className="space-y-2">
                   <label className="text-xs text-neutral-500 flex items-center gap-1"><Palette size={13} /> {t.folderColor}</label>
@@ -1060,12 +1010,10 @@ export default function App() {
 
             <hr className="border-white/5" />
 
-            {/* ── SECTION 2: Etichetta ── */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
                 <Type size={16} /> {t.section2}
               </h2>
-
               <div className="flex gap-2">
                 {['dymo', 'banner', 'badge'].map(style => (
                   <button key={style} onClick={() => setLabelStyleWithHistory(style)}
@@ -1076,14 +1024,12 @@ export default function App() {
                   </button>
                 ))}
               </div>
-
               <div className="space-y-2">
                 <label className="text-xs text-neutral-500">{t.labelText}</label>
                 <input type="text" value={label} maxLength={30} onChange={e => setLabelWithHistory(e.target.value)}
                   className="w-full bg-[#09090b] border border-neutral-700/50 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all"
                   placeholder={t.labelPlaceholder} />
               </div>
-
               {label.trim() !== '' && (
                 <>
                   <div className="space-y-2 pt-1">
@@ -1099,7 +1045,6 @@ export default function App() {
                       ))}
                     </div>
                   </div>
-
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-xs text-neutral-400">
                       <span className="flex items-center gap-1"><Type size={13} /> {t.fontSize}</span>
@@ -1109,7 +1054,6 @@ export default function App() {
                       onChange={e => setFontSizeMultiplierWithHistory(parseFloat(e.target.value))}
                       className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   </div>
-
                   {labelStyle === 'dymo' && (
                     <div className="space-y-2">
                       <div className="flex justify-between items-center text-xs text-neutral-400">
@@ -1129,7 +1073,6 @@ export default function App() {
                         className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                     </div>
                   )}
-
                   {labelStyle === 'badge' && (
                     <div className="space-y-2">
                       <div className="flex justify-between items-center text-xs text-neutral-400">
@@ -1149,7 +1092,6 @@ export default function App() {
                         className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                     </div>
                   )}
-
                   {(labelStyle === 'dymo' || labelStyle === 'badge') && (
                     <div className="flex items-center justify-between">
                       <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
@@ -1168,7 +1110,6 @@ export default function App() {
                       )}
                     </div>
                   )}
-
                   <div className="space-y-2 pt-2">
                     <label className="text-xs text-neutral-500 flex items-center gap-1">
                       <Palette size={14} /> {labelStyle === 'banner' ? t.colorBanner : labelStyle === 'badge' ? t.colorBadge : t.colorTape}
@@ -1193,7 +1134,6 @@ export default function App() {
                         className="sr-only" />
                     </div>
                   </div>
-
                   <div className="space-y-2 pt-4 border-t border-white/5">
                     <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
                       <span className="flex items-center gap-1"><Droplet size={14} /> {t.opacity}</span>
@@ -1209,51 +1149,35 @@ export default function App() {
 
             <hr className="border-white/5" />
 
-            {/* ── SECTION 3: Stili salvati ── */}
             <section className="space-y-4 pb-2">
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPresetsOpen(o => !o)}
-                  className="flex-1 flex items-center justify-between text-sm font-semibold tracking-wide text-neutral-300 uppercase"
-                >
+                <button onClick={() => setPresetsOpen(o => !o)}
+                  className="flex-1 flex items-center justify-between text-sm font-semibold tracking-wide text-neutral-300 uppercase">
                   <span className="flex items-center gap-2"><Bookmark size={16} /> {t.section3}</span>
                   <ChevronDown size={15} className={`transition-transform text-neutral-500 ${presetsOpen ? 'rotate-180' : ''}`} />
                 </button>
-                <button
-                  onClick={() => setSection3HintVisible(v => !v)}
-                  className="text-neutral-600 hover:text-neutral-400 transition-colors shrink-0"
-                  title={t.section3Hint}
-                >
+                <button onClick={() => setSection3HintVisible(v => !v)}
+                  className="text-neutral-600 hover:text-neutral-400 transition-colors shrink-0" title={t.section3Hint}>
                   <Info size={14} />
                 </button>
               </div>
-
               {section3HintVisible && (
                 <p className="text-[11px] text-neutral-500 bg-neutral-800/40 border border-neutral-700/40 rounded-lg px-3 py-2 leading-relaxed">
                   {t.section3Hint}
                 </p>
               )}
-
               {presetsOpen && (
                 <div className="space-y-3">
                   <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={presetName}
-                      onChange={e => setPresetName(e.target.value)}
+                    <input type="text" value={presetName} onChange={e => setPresetName(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
-                      placeholder={t.presetNamePlaceholder}
-                      maxLength={30}
-                      className="flex-1 bg-[#09090b] border border-neutral-700/50 rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all placeholder:text-neutral-600"
-                    />
-                    <button
-                      onClick={handleSavePreset}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-blue-500/60 hover:text-blue-300 transition-all text-xs font-medium shrink-0"
-                    >
+                      placeholder={t.presetNamePlaceholder} maxLength={30}
+                      className="flex-1 bg-[#09090b] border border-neutral-700/50 rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all placeholder:text-neutral-600" />
+                    <button onClick={handleSavePreset}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-blue-500/60 hover:text-blue-300 transition-all text-xs font-medium shrink-0">
                       <BookmarkPlus size={14} /> {t.savePreset}
                     </button>
                   </div>
-
                   {presets.length === 0 ? (
                     <p className="text-xs text-neutral-600 text-center py-3">{t.noPresets}</p>
                   ) : (
@@ -1262,16 +1186,11 @@ export default function App() {
                         <div key={preset.id}
                           className="flex items-center gap-2.5 bg-[#09090b] border border-neutral-800/60 rounded-xl px-3 py-2 group hover:border-neutral-700/60 transition-colors">
                           {preset.thumbnail ? (
-                            <img
-                              src={preset.thumbnail}
-                              alt={preset.name}
-                              className="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/10"
-                            />
+                            <img src={preset.thumbnail} alt={preset.name}
+                              className="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/10" />
                           ) : (
-                            <div
-                              className="w-10 h-10 rounded-lg shrink-0 border border-white/10 flex items-center justify-center"
-                              style={{ backgroundColor: preset.tapeColor }}
-                            >
+                            <div className="w-10 h-10 rounded-lg shrink-0 border border-white/10 flex items-center justify-center"
+                              style={{ backgroundColor: preset.tapeColor }}>
                               <Bookmark size={14} className="text-white/60" />
                             </div>
                           )}
@@ -1279,13 +1198,11 @@ export default function App() {
                             <span className="block text-xs text-neutral-200 font-mono truncate">{preset.name}</span>
                             <span className="text-[10px] text-neutral-600">{preset.labelStyle}</span>
                           </div>
-                          <button
-                            onClick={() => handleApplyPreset(preset)}
+                          <button onClick={() => handleApplyPreset(preset)}
                             className="text-[11px] text-blue-400 hover:text-blue-300 font-medium transition-colors shrink-0 px-1">
                             {t.applyPreset}
                           </button>
-                          <button
-                            onClick={() => handleDeletePreset(preset.id)}
+                          <button onClick={() => handleDeletePreset(preset.id)}
                             className="text-neutral-700 hover:text-red-400 transition-colors shrink-0">
                             <Trash2 size={12} />
                           </button>
@@ -1299,23 +1216,17 @@ export default function App() {
           </div>
         </div>
 
-        {/* Footer sticky */}
         <div className="sidebar-footer shrink-0 p-6 lg:p-8 pt-5 bg-[#121214]">
           <div className="flex gap-2 mb-4">
             <button onClick={undo} disabled={!canUndo} title={`${t.undo} (Cmd+Z)`}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-medium transition-all ${
                 canUndo ? 'border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-neutral-500 hover:text-white' : 'border-neutral-800/30 bg-[#09090b]/40 text-neutral-600 cursor-not-allowed'
-              }`}>
-              <Undo2 size={13} /> {t.undo}
-            </button>
+              }`}><Undo2 size={13} /> {t.undo}</button>
             <button onClick={redo} disabled={!canRedo} title={`${t.redo} (Cmd+Shift+Z)`}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-medium transition-all ${
                 canRedo ? 'border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-neutral-500 hover:text-white' : 'border-neutral-800/30 bg-[#09090b]/40 text-neutral-600 cursor-not-allowed'
-              }`}>
-              <Redo2 size={13} /> {t.redo}
-            </button>
+              }`}><Redo2 size={13} /> {t.redo}</button>
           </div>
-
           <div ref={downloadMenuRef} className="relative w-full mb-6">
             <div className="flex w-full">
               <button onClick={handleDownloadPng} disabled={isExporting}
@@ -1348,7 +1259,6 @@ export default function App() {
               </div>
             )}
           </div>
-
           <div className="flex flex-col items-center gap-3 pt-6 border-t border-white/5">
             <span className="text-[10px] text-neutral-500 font-mono tracking-widest lowercase">made with love by antonello :)</span>
             <div className="flex items-center gap-5 text-neutral-400">
@@ -1366,7 +1276,6 @@ export default function App() {
           .custom-scrollbar::-webkit-scrollbar { width: 6px; }
           .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
           .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.1); border-radius: 10px; }
-          /* ── Frosted footer ─────────────────────────────── */
           .sidebar-footer {
             position: relative;
             backdrop-filter: blur(16px) saturate(180%);
@@ -1375,16 +1284,10 @@ export default function App() {
             border-top: 1px solid rgba(255,255,255,0.06);
           }
           .sidebar-footer::before {
-            content: '';
-            position: absolute;
-            top: -48px;
-            left: 0;
-            right: 0;
-            height: 48px;
+            content: ''; position: absolute; top: -48px; left: 0; right: 0; height: 48px;
             pointer-events: none;
             background: linear-gradient(to bottom, transparent, rgba(18,18,20,0.82));
           }
-          /* ───────────────────────────────────────────────── */
           .liquid-glass-btn {
             position: relative; overflow: hidden; color: rgba(255,255,255,0.92); font-weight: 500;
             background: linear-gradient(145deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.10) 100%);
@@ -1401,13 +1304,11 @@ export default function App() {
           @keyframes bounce-x { 0%,100% { transform: translateX(0); } 50% { transform: translateX(-6px); } }
           .animate-bounce-x { animation: bounce-x 1.8s ease-in-out infinite; }
         `}} />
-
         {!coverSrc && (
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-neutral-600 text-xs pointer-events-none select-none">
             <span className="animate-bounce-x">←</span><span>{t.uploadHint}</span>
           </div>
         )}
-
         <div className="relative group w-full h-full flex items-center justify-center max-w-4xl" style={{ touchAction: 'none' }}>
           {(coverSrc || label.trim() !== '') && (
             <div className="absolute top-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 bg-neutral-800/80 backdrop-blur text-neutral-300 text-xs px-3 py-1.5 rounded-full pointer-events-none border border-white/10 z-20">
