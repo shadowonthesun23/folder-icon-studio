@@ -8,6 +8,7 @@ const TRANSLATIONS = {
     section1: '1. Grafica',
     folderStyle: 'Stile cartella',
     folderColor: 'Colore cartella',
+    cassetteColor: 'Colore cassetta',
     defaultColor: 'Default',
     changeImage: 'Cambia immagine',
     uploadImage: 'Carica Immagine',
@@ -55,6 +56,7 @@ const TRANSLATIONS = {
     section1: '1. Artwork',
     folderStyle: 'Folder style',
     folderColor: 'Folder color',
+    cassetteColor: 'Cassette color',
     defaultColor: 'Default',
     changeImage: 'Change Image',
     uploadImage: 'Upload Image',
@@ -115,7 +117,7 @@ const FOLDER_COLORS = [
 const CASSETTE_PNG_W = 2183;
 const CASSETTE_PNG_H = 1417;
 
-// Area label misurata su cassette-base.png (coordinate fornite dall'utente)
+// Area label misurata su cassette-base.png
 const CASSETTE_LABEL_X = 135;
 const CASSETTE_LABEL_Y = 103;
 const CASSETTE_LABEL_W = 1909;
@@ -153,7 +155,7 @@ const FOLDERS = {
   cassette: {
     id: 'cassette',
     name: 'Cassetta',
-    tintFolder: false,
+    tintFolder: true,
     getFolderRect: (cw, ch) => {
       const pngRatio = CASSETTE_PNG_W / CASSETTE_PNG_H;
       let w, h, x, y;
@@ -494,6 +496,14 @@ export default function App() {
     };
   });
 
+  // ─── Mod 1 & 2: when switching to cassette, clear label and force non-banner style
+  useEffect(() => {
+    if (folderShape === 'cassette') {
+      setLabel('');
+      setLabelStyle(prev => prev === 'banner' ? 'dymo' : prev);
+    }
+  }, [folderShape]);
+
   const pushHistory = useCallback((snap) => {
     if (isRestoringRef.current) return;
     const stack = historyRef.current;
@@ -620,17 +630,15 @@ export default function App() {
       .catch(err => console.error('Folder load error:', err));
   }, [folderShape]);
 
-  // ─── Load cassette assets (base + overlay + maschera) ─────────────────────────
+  // ─── Load cassette assets ─────────────────────────────────────────────────────
   useEffect(() => {
     if (folderShape !== 'cassette') return;
     setCassetteBaseImg(null); setCassetteOverlayImg(null); setCassetteMaskImg(null);
     Promise.all([
       loadPngAsImage('/cassette-base.png'),
       loadPngAsImage('/cassette-overlay.png'),
-      // maschera.svg caricata come immagine: il browser la renderizza con l'alpha corretta
       new Promise((resolve, reject) => {
         const img = new Image();
-        // forziamo width/height per garantire dimensioni note al momento del drawImage
         img.width = CASSETTE_LABEL_W;
         img.height = CASSETTE_LABEL_H;
         img.onload = () => resolve(img);
@@ -734,12 +742,24 @@ export default function App() {
     ctx.clearRect(0, 0, w, h);
 
     if (folderShape === 'cassette') {
-      // 1. Base
-      ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+      // ─── Mod 3: color tint on cassette-base using offscreen ───────────────
+      if (effectiveTintColor) {
+        const offCassette = document.createElement('canvas');
+        offCassette.width = w; offCassette.height = h;
+        const offCtx = offCassette.getContext('2d');
+        offCtx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        offCtx.globalCompositeOperation = 'color';
+        offCtx.fillStyle = effectiveTintColor;
+        offCtx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        offCtx.globalCompositeOperation = 'destination-in';
+        offCtx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        ctx.drawImage(offCassette, 0, 0);
+      } else {
+        ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+      }
 
-      // 2. Immagine utente mascherata con destination-in su canvas offscreen
+      // Immagine utente mascherata su canvas offscreen
       if (coverImg) {
-        // Coordinate dell'area label in pixel-canvas
         const sX = folderRect.w / CASSETTE_PNG_W;
         const sY = folderRect.h / CASSETTE_PNG_H;
         const rectX = folderRect.x + CASSETTE_LABEL_X * sX;
@@ -747,7 +767,6 @@ export default function App() {
         const rectW = CASSETTE_LABEL_W * sX;
         const rectH = CASSETTE_LABEL_H * sY;
 
-        // Calcolo dimensioni/posizione immagine utente (cover-fit + scala + offset + rotazione)
         const imgRatio = coverImg.width / coverImg.height;
         const areaRatio = rectW / rectH;
         let drawW, drawH;
@@ -756,7 +775,6 @@ export default function App() {
         const drawX = (rectW - drawW) / 2 + coverOffset.x;
         const drawY = (rectH - drawH) / 2 + coverOffset.y;
 
-        // Offscreen esattamente delle dimensioni dell'area label
         const off = document.createElement('canvas');
         off.width = Math.round(rectW);
         off.height = Math.round(rectH);
@@ -764,7 +782,6 @@ export default function App() {
         offCtx.imageSmoothingEnabled = true;
         offCtx.imageSmoothingQuality = 'high';
 
-        // 2a. Disegna immagine utente sull'offscreen
         offCtx.save();
         offCtx.translate(drawX + drawW / 2, drawY + drawH / 2);
         offCtx.rotate((coverRotation * Math.PI) / 180);
@@ -772,17 +789,14 @@ export default function App() {
         offCtx.drawImage(coverImg, drawX, drawY, drawW, drawH);
         offCtx.restore();
 
-        // 2b. Applica maschera SVG con destination-in
-        // La maschera SVG ha viewBox="0 0 1909 927.5", scalata esattamente su rectW x rectH
         offCtx.globalCompositeOperation = 'destination-in';
         offCtx.drawImage(cassetteMaskImg, 0, 0, off.width, off.height);
         offCtx.globalCompositeOperation = 'source-over';
 
-        // 2c. Copia offscreen sul canvas principale alla posizione corretta
         ctx.drawImage(off, rectX, rectY);
       }
 
-      // 3. Overlay sopra tutto
+      // Overlay sopra tutto
       if (cassetteOverlayImg) {
         ctx.drawImage(cassetteOverlayImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
@@ -975,9 +989,12 @@ export default function App() {
                 </div>
               )}
 
+              {/* Colore cartella/cassetta — visibile se tintFolder === true */}
               {FOLDERS[folderShape].tintFolder && (
                 <div className="space-y-2">
-                  <label className="text-xs text-neutral-500 flex items-center gap-1"><Palette size={13} /> {t.folderColor}</label>
+                  <label className="text-xs text-neutral-500 flex items-center gap-1">
+                    <Palette size={13} /> {folderShape === 'cassette' ? t.cassetteColor : t.folderColor}
+                  </label>
                   <div className="flex flex-wrap gap-2 items-center">
                     <button onClick={() => setFolderColorOverrideWithHistory(null)} title={t.defaultColor}
                       className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
@@ -1015,14 +1032,23 @@ export default function App() {
                 <Type size={16} /> {t.section2}
               </h2>
               <div className="flex gap-2">
-                {['dymo', 'banner', 'badge'].map(style => (
-                  <button key={style} onClick={() => setLabelStyleWithHistory(style)}
-                    className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
-                      labelStyle === style ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                    }`}>
-                    {t[`style${style.charAt(0).toUpperCase()}${style.slice(1)}`]}
-                  </button>
-                ))}
+                {['dymo', 'banner', 'badge'].map(style => {
+                  const isBannerDisabled = style === 'banner' && folderShape === 'cassette';
+                  return (
+                    <button key={style}
+                      onClick={() => !isBannerDisabled && setLabelStyleWithHistory(style)}
+                      disabled={isBannerDisabled}
+                      className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
+                        isBannerDisabled
+                          ? 'border-neutral-800/30 bg-[#09090b]/40 text-neutral-700 cursor-not-allowed'
+                          : labelStyle === style
+                            ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                            : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                      }`}>
+                      {t[`style${style.charAt(0).toUpperCase()}${style.slice(1)}`]}
+                    </button>
+                  );
+                })}
               </div>
               <div className="space-y-2">
                 <label className="text-xs text-neutral-500">{t.labelText}</label>
