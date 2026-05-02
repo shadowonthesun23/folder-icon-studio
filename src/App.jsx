@@ -28,7 +28,7 @@ const TRANSLATIONS = {
     colorBanner: 'Colore Fascia',
     opacity: 'Opacit\u00e0',
     download: 'Scarica',
-    downloadPng: 'PNG 1024×1024',
+    downloadPng: 'PNG 1024\u00d71024',
     downloadIcns: 'ICNS (macOS)',
     downloadIco: 'ICO (Windows)',
     uploadHint: "Carica un\u2019immagine per iniziare",
@@ -62,7 +62,7 @@ const TRANSLATIONS = {
     colorBanner: 'Banner Color',
     opacity: 'Opacity',
     download: 'Download',
-    downloadPng: 'PNG 1024×1024',
+    downloadPng: 'PNG 1024\u00d71024',
     downloadIcns: 'ICNS (macOS)',
     downloadIco: 'ICO (Windows)',
     uploadHint: 'Upload an image to get started',
@@ -184,7 +184,6 @@ const loadSvgAsImage = (svgString) => new Promise((resolve, reject) => {
 
 // ─── Export helpers ──────────────────────────────────────────────────────────
 
-/** Ritorna un canvas ridimensionato a `size`x`size` */
 const resizeCanvas = (source, size) => {
   const c = document.createElement('canvas');
   c.width = size; c.height = size;
@@ -192,17 +191,10 @@ const resizeCanvas = (source, size) => {
   return c;
 };
 
-/** Ritorna una Promise<Blob> PNG dal canvas a `size`x`size` */
 const canvasToPngBlob = (source, size) => new Promise((resolve) => {
   resizeCanvas(source, size).toBlob(resolve, 'image/png');
 });
 
-/**
- * Costruisce il binario ICNS con chunk retina completi.
- * Specifiche chunk OSType:
- *   icp4=16, icp5=32, icp6=64, ic07=128, ic08=256, ic09=512, ic10=1024
- *   ic11=16@2x(32), ic12=32@2x(64), ic13=128@2x(256), ic14=256@2x(512)
- */
 const buildIcns = async (canvas) => {
   const CHUNKS = [
     { ostype: 'icp4', size: 16 },
@@ -212,13 +204,11 @@ const buildIcns = async (canvas) => {
     { ostype: 'ic08', size: 256 },
     { ostype: 'ic09', size: 512 },
     { ostype: 'ic10', size: 1024 },
-    { ostype: 'ic11', size: 32 },   // 16@2x
-    { ostype: 'ic12', size: 64 },   // 32@2x
-    { ostype: 'ic13', size: 256 },  // 128@2x
-    { ostype: 'ic14', size: 512 },  // 256@2x
+    { ostype: 'ic11', size: 32 },
+    { ostype: 'ic12', size: 64 },
+    { ostype: 'ic13', size: 256 },
+    { ostype: 'ic14', size: 512 },
   ];
-
-  // Cache PNG per dimensione per evitare di generare duplicati
   const pngCache = {};
   const getPng = async (size) => {
     if (!pngCache[size]) {
@@ -227,85 +217,58 @@ const buildIcns = async (canvas) => {
     }
     return pngCache[size];
   };
-
   const chunkBuffers = await Promise.all(
     CHUNKS.map(async ({ ostype, size }) => {
       const pngData = await getPng(size);
-      // Ogni chunk: 4 byte ostype + 4 byte length (header 8 + data) + data
       const chunkLen = 8 + pngData.length;
       const buf = new Uint8Array(chunkLen);
-      // OSType ASCII
       for (let i = 0; i < 4; i++) buf[i] = ostype.charCodeAt(i);
-      // Length big-endian uint32
       const dv = new DataView(buf.buffer);
       dv.setUint32(4, chunkLen, false);
       buf.set(pngData, 8);
       return buf;
     })
   );
-
   const totalDataLen = chunkBuffers.reduce((s, b) => s + b.length, 0);
-  const icnsLen = 8 + totalDataLen; // 4 magic + 4 total length + chunks
+  const icnsLen = 8 + totalDataLen;
   const icns = new Uint8Array(icnsLen);
   const dv = new DataView(icns.buffer);
-
-  // Magic: 'icns'
   icns[0] = 0x69; icns[1] = 0x63; icns[2] = 0x6E; icns[3] = 0x73;
   dv.setUint32(4, icnsLen, false);
-
   let offset = 8;
-  for (const chunk of chunkBuffers) {
-    icns.set(chunk, offset);
-    offset += chunk.length;
-  }
-
+  for (const chunk of chunkBuffers) { icns.set(chunk, offset); offset += chunk.length; }
   return new Blob([icns], { type: 'image/x-icns' });
 };
 
-/**
- * Costruisce un ICO multi-res (16/32/48/64/128/256).
- * Formato ICO: header + directory entries + PNG data.
- * I PNG > 256px non sono supportati dallo spec ICO, quindi usiamo max 256.
- */
 const buildIco = async (canvas) => {
   const SIZES = [16, 32, 48, 64, 128, 256];
   const pngBlobs = await Promise.all(SIZES.map(s => canvasToPngBlob(canvas, s)));
   const pngBuffers = await Promise.all(pngBlobs.map(b => b.arrayBuffer().then(ab => new Uint8Array(ab))));
-
-  // ICO header: 6 bytes
-  // Directory entries: 16 bytes each
-  // PNG data follows
   const headerSize = 6;
   const dirEntrySize = 16;
   const dirSize = dirEntrySize * SIZES.length;
   const totalSize = headerSize + dirSize + pngBuffers.reduce((s, b) => s + b.length, 0);
-
   const buf = new ArrayBuffer(totalSize);
   const dv = new DataView(buf);
   const u8 = new Uint8Array(buf);
-
-  // ICO header
-  dv.setUint16(0, 0, true);       // reserved
-  dv.setUint16(2, 1, true);       // type: 1 = ICO
-  dv.setUint16(4, SIZES.length, true); // count
-
+  dv.setUint16(0, 0, true);
+  dv.setUint16(2, 1, true);
+  dv.setUint16(4, SIZES.length, true);
   let dataOffset = headerSize + dirSize;
   SIZES.forEach((size, i) => {
     const png = pngBuffers[i];
     const entryBase = headerSize + i * dirEntrySize;
-    // Width/Height: 0 = 256
     u8[entryBase + 0] = size === 256 ? 0 : size;
     u8[entryBase + 1] = size === 256 ? 0 : size;
-    u8[entryBase + 2] = 0; // color count
-    u8[entryBase + 3] = 0; // reserved
-    dv.setUint16(entryBase + 4, 1, true);  // planes
-    dv.setUint16(entryBase + 6, 32, true); // bit count
+    u8[entryBase + 2] = 0;
+    u8[entryBase + 3] = 0;
+    dv.setUint16(entryBase + 4, 1, true);
+    dv.setUint16(entryBase + 6, 32, true);
     dv.setUint32(entryBase + 8, png.length, true);
     dv.setUint32(entryBase + 12, dataOffset, true);
     u8.set(png, dataOffset);
     dataOffset += png.length;
   });
-
   return new Blob([buf], { type: 'image/x-icon' });
 };
 
@@ -318,12 +281,10 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, t
   const tapeBaseY = h * 0.55 - tapeH / 2;
   const x = tapeBaseX + tapeOffsetX;
   const y = tapeBaseY + tapeOffsetY;
-
   ctx.save();
   ctx.translate(x + tapeW / 2, y + tapeH / 2);
   ctx.rotate((tapeRotationDeg * Math.PI) / 180);
   ctx.translate(-(x + tapeW / 2), -(y + tapeH / 2));
-
   ctx.shadowColor = 'rgba(0,0,0,0.3)';
   ctx.shadowBlur = 15;
   ctx.shadowOffsetY = 5;
@@ -341,7 +302,6 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, t
   ctx.fill();
   ctx.globalAlpha = 1;
   ctx.shadowColor = 'transparent';
-
   ctx.fillStyle = getTapeTextColor(tapeHex);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -363,34 +323,27 @@ const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontSizeMult
   const rectY = folderRect.y + clipRect.y * scaleY;
   const rectW = clipRect.w * scaleX;
   const rectH = clipRect.h * scaleY;
-
   const bannerH = rectH * 0.30;
   const bannerY = rectY + rectH - bannerH;
-
   ctx.save();
   shape.buildFlapPath(ctx, folderRect);
   ctx.clip();
-
   ctx.globalAlpha = opacity;
   ctx.fillStyle = tapeHex;
   ctx.fillRect(rectX, bannerY, rectW, bannerH);
   ctx.globalAlpha = 1;
-
   const textColor = getTapeTextColor(tapeHex);
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-
   const words = text.split(' ');
   let lines = [text];
   let baseFontSize = bannerH * 0.28 * fontSizeMultiplier;
   ctx.font = `bold ${baseFontSize}px "${fontFamily}", sans-serif`;
-
   if (words.length > 1 && ctx.measureText(text).width > rectW * 0.88) {
     const mid = Math.ceil(words.length / 2);
     lines = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
   }
-
   const lineCount = lines.length;
   lines.forEach((line, i) => {
     let fs = baseFontSize;
@@ -402,7 +355,6 @@ const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontSizeMult
     const lineY = bannerY + bannerH * ((i + 1) / (lineCount + 1));
     ctx.fillText(line, rectX + rectW / 2, lineY);
   });
-
   ctx.restore();
 };
 
@@ -461,7 +413,6 @@ export default function App() {
     try { localStorage.setItem('fis_lang', l); } catch {}
   };
 
-  // Chiude il menu download cliccando fuori
   useEffect(() => {
     if (!downloadMenuOpen) return;
     const handler = (e) => {
@@ -592,12 +543,10 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     const w = canvas.width;
     const h = canvas.height;
-
     const render = () => {
       ctx.clearRect(0, 0, w, h);
       const shape = FOLDERS[folderShape];
       const folderRect = shape.getFolderRect(w, h);
-
       if (shape.tintFolder && effectiveTintColor) {
         const offscreen = document.createElement('canvas');
         offscreen.width = w; offscreen.height = h;
@@ -612,18 +561,15 @@ export default function App() {
       } else {
         ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
       }
-
       if (coverImg) {
         ctx.save();
         shape.buildFlapPath(ctx, folderRect);
         ctx.clip();
-
         const { clipRect } = shape;
         const rectX = folderRect.x + clipRect.x * (folderRect.w / clipRect.vw);
         const rectY = folderRect.y + clipRect.y * (folderRect.h / clipRect.vh);
         const rectW = clipRect.w * (folderRect.w / clipRect.vw);
         const rectH = clipRect.h * (folderRect.h / clipRect.vh);
-
         const imgRatio = coverImg.width / coverImg.height;
         const canvasRatio = rectW / rectH;
         let drawW, drawH;
@@ -631,14 +577,12 @@ export default function App() {
         else { drawW = rectW * coverScale; drawH = drawW / imgRatio; }
         const drawX = rectX + (rectW - drawW) / 2 + coverOffset.x;
         const drawY = rectY + (rectH - drawH) / 2 + coverOffset.y;
-
         ctx.save();
         ctx.translate(drawX + drawW / 2, drawY + drawH / 2);
         ctx.rotate((coverRotation * Math.PI) / 180);
         ctx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
         ctx.drawImage(coverImg, drawX, drawY, drawW, drawH);
         ctx.restore();
-
         const shadow = ctx.createLinearGradient(0, rectY, 0, rectY + rectH);
         shadow.addColorStop(0, 'rgba(255,255,255,0.15)');
         shadow.addColorStop(0.1, 'rgba(0,0,0,0)');
@@ -648,7 +592,6 @@ export default function App() {
         ctx.fillRect(rectX, rectY, rectW, rectH);
         ctx.restore();
       }
-
       if (label.trim() !== '') {
         if (labelStyle === 'dymo') {
           drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily);
@@ -657,7 +600,6 @@ export default function App() {
         }
       }
     };
-
     render();
   }, [baseImgData, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, folderShape, tapeRotation, fontSizeMultiplier, fontFamily]);
 
@@ -716,277 +658,282 @@ export default function App() {
     <div className="flex flex-col lg:flex-row h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-hidden">
       <span style={{ fontFamily: 'Space Mono', position: 'absolute', opacity: 0, pointerEvents: 'none' }}>.</span>
 
-      <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[45dvh] lg:h-full overflow-y-auto custom-scrollbar">
-        <div className="relative p-6 lg:p-8 pb-4 lg:pb-6 border-b border-white/5 shrink-0">
-          <div className="absolute top-4 right-5 lg:top-5 lg:right-7 flex items-center gap-0.5 bg-[#09090b] border border-neutral-800 rounded-md p-0.5">
-            {['it', 'en'].map(l => (
-              <button
-                key={l}
-                onClick={() => switchLang(l)}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide transition-all ${
-                  lang === l ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'
-                }`}
-              >
-                {l.toUpperCase()}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Folder Icon Studio" className="w-8 h-8 lg:w-10 lg:h-10 object-contain shrink-0" />
-            <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-white">Folder Icon Studio</h1>
-          </div>
-          <p className="text-neutral-400 text-xs lg:text-sm mt-1">{t.subtitle}</p>
-        </div>
+      {/* aside: flex-col con overflow-y-auto sul solo contenuto scrollabile, footer sticky */}
+      <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[45dvh] lg:h-full overflow-hidden">
 
-        <div className="p-6 lg:p-8 flex flex-col gap-6 lg:gap-8">
-          <section className="space-y-4">
-            <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
-              <LucideImage size={16} /> {t.section1}
-            </h2>
-
-            <div className="relative">
-              <label className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all bg-[#09090b] border border-neutral-700/50 border-dashed rounded-xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 group">
-                <div className="flex flex-col items-center space-y-2 text-center">
-                  <div className="p-3 bg-neutral-800 rounded-full group-hover:bg-blue-500/20 transition-colors">
-                    <Upload size={20} className="text-neutral-400 group-hover:text-blue-400" />
-                  </div>
-                  <span className="font-medium text-sm text-neutral-300">{coverSrc ? t.changeImage : t.uploadImage}</span>
-                  <span className="text-xs text-neutral-500">{t.uploadFormats}</span>
-                </div>
-                <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
-              </label>
-              {coverSrc && (
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+          <div className="relative p-6 lg:p-8 pb-4 lg:pb-6 border-b border-white/5 shrink-0">
+            <div className="absolute top-4 right-5 lg:top-5 lg:right-7 flex items-center gap-0.5 bg-[#09090b] border border-neutral-800 rounded-md p-0.5">
+              {['it', 'en'].map(l => (
                 <button
-                  onClick={handleClearImage}
-                  title={t.removeImage}
-                  className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-800 hover:bg-red-500/80 text-neutral-400 hover:text-white transition-all"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-
-            {coverSrc && (
-              <div className="bg-[#09090b] p-4 rounded-xl border border-neutral-800/50 space-y-4">
-                <div>
-                  <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
-                    <span className="flex items-center gap-1"><ZoomIn size={14} /> {t.zoom}</span>
-                    <span>{Math.round(coverScale * 100)}%</span>
-                  </div>
-                  <input type="range" min="0.5" max="2.5" step="0.05" value={coverScale} onChange={e => setCoverScale(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                </div>
-                <div>
-                  <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
-                    <span className="flex items-center gap-1"><RotateCw size={14} /> {t.coverRotation}</span>
-                    <span>{coverRotation}\u00b0</span>
-                  </div>
-                  <input type="range" min="-180" max="180" step="1" value={coverRotation} onChange={e => setCoverRotation(parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-xs text-neutral-500 flex items-center gap-1">
-                <Palette size={13} /> {t.folderColor}
-              </label>
-              <div className="flex flex-wrap gap-2 items-center">
-                <button
-                  onClick={() => setFolderColorOverride(null)}
-                  title={t.defaultColor}
-                  className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-                    folderColorOverride === null
-                      ? 'border-blue-500 scale-110 bg-[#4B8EF0] text-white'
-                      : 'border-neutral-600 bg-gradient-to-br from-[#6aadff] to-[#2171e8] hover:scale-105'
+                  key={l}
+                  onClick={() => switchLang(l)}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide transition-all ${
+                    lang === l ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'
                   }`}
                 >
-                  {folderColorOverride === null && <Check size={11} />}
+                  {l.toUpperCase()}
                 </button>
-                {FOLDER_COLORS.slice(1).map(color => (
-                  <button
-                    key={color.id}
-                    onClick={() => setFolderColorOverride(color.hex)}
-                    title={color.name}
-                    className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-                      folderColorOverride === color.hex && !isCustomFolderColor
-                        ? 'border-white scale-110'
-                        : 'border-transparent hover:scale-105'
-                    }`}
-                    style={{ backgroundColor: color.hex }}
-                  >
-                    {folderColorOverride === color.hex && !isCustomFolderColor && (
-                      <Check size={11} style={{ color: getTapeTextColor(color.hex) }} />
-                    )}
-                  </button>
-                ))}
-                <button
-                  onClick={() => folderColorInputRef.current?.click()}
-                  title={t.customColor}
-                  className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
-                    isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
-                  }`}
-                  style={isCustomFolderColor ? { backgroundColor: folderColorOverride } : {}}
-                >
-                  {isCustomFolderColor
-                    ? <Check size={11} style={{ color: '#fff', mixBlendMode: 'difference' }} />
-                    : <Palette size={11} className="text-neutral-400" />
-                  }
-                </button>
-                <input
-                  ref={folderColorInputRef}
-                  type="color"
-                  value={isCustomFolderColor ? folderColorOverride : customFolderColor}
-                  onChange={e => {
-                    setCustomFolderColor(e.target.value);
-                    setFolderColorOverride(e.target.value);
-                  }}
-                  className="sr-only"
-                />
-              </div>
+              ))}
             </div>
-          </section>
-
-          <hr className="border-white/5" />
-
-          <section className="space-y-4">
-            <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
-              <Type size={16} /> {t.section2}
-            </h2>
-
-            <div className="flex gap-2">
-              <button onClick={() => setLabelStyle('dymo')}
-                className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
-                  labelStyle === 'dymo' ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                }`}>
-                {t.styleDymo}
-              </button>
-              <button onClick={() => setLabelStyle('banner')}
-                className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
-                  labelStyle === 'banner' ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                }`}>
-                {t.styleBanner}
-              </button>
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="Folder Icon Studio" className="w-8 h-8 lg:w-10 lg:h-10 object-contain shrink-0" />
+              <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-white">Folder Icon Studio</h1>
             </div>
+            <p className="text-neutral-400 text-xs lg:text-sm mt-1">{t.subtitle}</p>
+          </div>
 
-            <div className="space-y-2">
-              <label className="text-xs text-neutral-500">{t.labelText}</label>
-              <input
-                type="text" value={label} maxLength={30}
-                onChange={e => setLabel(e.target.value)}
-                className="w-full bg-[#09090b] border border-neutral-700/50 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all"
-                placeholder={t.labelPlaceholder}
-              />
-            </div>
+          <div className="p-6 lg:p-8 flex flex-col gap-6 lg:gap-8">
+            <section className="space-y-4">
+              <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
+                <LucideImage size={16} /> {t.section1}
+              </h2>
 
-            {label.trim() !== '' && (
-              <>
-                <div className="space-y-2 pt-1">
-                  <label className="text-xs text-neutral-500">{t.font}</label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {FONT_OPTIONS.map(opt => (
-                      <button key={opt.id} onClick={() => setFontFamily(opt.family)}
-                        className={`py-2 px-1 rounded-lg border text-xs transition-all ${
-                          fontFamily === opt.family ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
-                        }`} style={{ fontFamily: opt.family }}>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-xs text-neutral-400">
-                    <span className="flex items-center gap-1"><Type size={13} /> {t.fontSize}</span>
-                    <span>{Math.round(fontSizeMultiplier * 100)}%</span>
-                  </div>
-                  <input type="range" min="0.4" max="1.6" step="0.05" value={fontSizeMultiplier} onChange={e => setFontSizeMultiplier(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                </div>
-
-                {labelStyle === 'dymo' && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs text-neutral-400">
-                      <span className="flex items-center gap-1"><RotateCw size={13} /> {t.tapeAngle}</span>
-                      <div className="flex items-center gap-1">
-                        <span>{tapeRotation.toFixed(1)}\u00b0</span>
-                        {tapeRotation !== -2.3 && (
-                          <button onClick={() => setTapeRotation(-2.3)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
-                            <RotateCcw size={10} />
-                          </button>
-                        )}
-                      </div>
+              <div className="relative">
+                <label className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all bg-[#09090b] border border-neutral-700/50 border-dashed rounded-xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 group">
+                  <div className="flex flex-col items-center space-y-2 text-center">
+                    <div className="p-3 bg-neutral-800 rounded-full group-hover:bg-blue-500/20 transition-colors">
+                      <Upload size={20} className="text-neutral-400 group-hover:text-blue-400" />
                     </div>
-                    <input type="range" min="-15" max="15" step="0.5" value={tapeRotation} onChange={e => setTapeRotation(parseFloat(e.target.value))}
+                    <span className="font-medium text-sm text-neutral-300">{coverSrc ? t.changeImage : t.uploadImage}</span>
+                    <span className="text-xs text-neutral-500">{t.uploadFormats}</span>
+                  </div>
+                  <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                </label>
+                {coverSrc && (
+                  <button
+                    onClick={handleClearImage}
+                    title={t.removeImage}
+                    className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-800 hover:bg-red-500/80 text-neutral-400 hover:text-white transition-all"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {coverSrc && (
+                <div className="bg-[#09090b] p-4 rounded-xl border border-neutral-800/50 space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
+                      <span className="flex items-center gap-1"><ZoomIn size={14} /> {t.zoom}</span>
+                      <span>{Math.round(coverScale * 100)}%</span>
+                    </div>
+                    <input type="range" min="0.5" max="2.5" step="0.05" value={coverScale} onChange={e => setCoverScale(parseFloat(e.target.value))}
                       className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   </div>
-                )}
-
-                {labelStyle === 'dymo' && (
-                  <div className="flex items-center justify-between">
-                    <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-                      <Move size={11} className="shrink-0" /> {t.dragHint}
-                    </p>
-                    {(tapeOffset.x !== 0 || tapeOffset.y !== 0) && (
-                      <button onClick={() => setTapeOffset({ x: 0, y: 0 })}
-                        className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0">
-                        <RotateCcw size={10} /> {t.resetBtn}
-                      </button>
-                    )}
+                  <div>
+                    <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
+                      <span className="flex items-center gap-1"><RotateCw size={14} /> {t.coverRotation}</span>
+                      <span>{coverRotation}\u00b0</span>
+                    </div>
+                    <input type="range" min="-180" max="180" step="1" value={coverRotation} onChange={e => setCoverRotation(parseInt(e.target.value))}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   </div>
-                )}
+                </div>
+              )}
 
-                <div className="space-y-2 pt-2">
-                  <label className="text-xs text-neutral-500 flex items-center gap-1">
-                    <Palette size={14} /> {labelStyle === 'banner' ? t.colorBanner : t.colorTape}
-                  </label>
-                  <div className="flex gap-3 items-center">
-                    {TAPE_COLORS.map(color => (
-                      <button key={color.id} onClick={() => setTapeColor(color.hex)}
-                        className={`relative w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${
-                          tapeColor === color.hex ? 'border-blue-500 scale-110' : 'border-transparent hover:scale-105'
-                        }`} style={{ backgroundColor: color.hex }} title={color.name}>
-                        {tapeColor === color.hex && <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />}
-                      </button>
-                    ))}
+              <div className="space-y-2">
+                <label className="text-xs text-neutral-500 flex items-center gap-1">
+                  <Palette size={13} /> {t.folderColor}
+                </label>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <button
+                    onClick={() => setFolderColorOverride(null)}
+                    title={t.defaultColor}
+                    className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                      folderColorOverride === null
+                        ? 'border-blue-500 scale-110 bg-[#4B8EF0] text-white'
+                        : 'border-neutral-600 bg-gradient-to-br from-[#6aadff] to-[#2171e8] hover:scale-105'
+                    }`}
+                  >
+                    {folderColorOverride === null && <Check size={11} />}
+                  </button>
+                  {FOLDER_COLORS.slice(1).map(color => (
                     <button
-                      onClick={() => tapeColorInputRef.current?.click()}
-                      title={t.customColor}
-                      className={`relative w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
-                        !isPresetColor ? 'border-blue-500 scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
+                      key={color.id}
+                      onClick={() => setFolderColorOverride(color.hex)}
+                      title={color.name}
+                      className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                        folderColorOverride === color.hex && !isCustomFolderColor
+                          ? 'border-white scale-110'
+                          : 'border-transparent hover:scale-105'
                       }`}
-                      style={!isPresetColor ? { backgroundColor: tapeColor } : {}}
+                      style={{ backgroundColor: color.hex }}
                     >
-                      {isPresetColor
-                        ? <Palette size={12} className="text-neutral-400" />
-                        : <Check size={14} style={{ color: '#fff', mixBlendMode: 'difference' }} />
-                      }
+                      {folderColorOverride === color.hex && !isCustomFolderColor && (
+                        <Check size={11} style={{ color: getTapeTextColor(color.hex) }} />
+                      )}
                     </button>
-                    <input
-                      ref={tapeColorInputRef}
-                      type="color"
-                      value={tapeColor}
-                      onChange={e => setTapeColor(e.target.value)}
-                      className="sr-only"
-                    />
-                  </div>
+                  ))}
+                  <button
+                    onClick={() => folderColorInputRef.current?.click()}
+                    title={t.customColor}
+                    className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
+                      isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
+                    }`}
+                    style={isCustomFolderColor ? { backgroundColor: folderColorOverride } : {}}
+                  >
+                    {isCustomFolderColor
+                      ? <Check size={11} style={{ color: '#fff', mixBlendMode: 'difference' }} />
+                      : <Palette size={11} className="text-neutral-400" />
+                    }
+                  </button>
+                  <input
+                    ref={folderColorInputRef}
+                    type="color"
+                    value={isCustomFolderColor ? folderColorOverride : customFolderColor}
+                    onChange={e => {
+                      setCustomFolderColor(e.target.value);
+                      setFolderColorOverride(e.target.value);
+                    }}
+                    className="sr-only"
+                  />
                 </div>
+              </div>
+            </section>
 
-                <div className="space-y-2 pt-4 border-t border-white/5">
-                  <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
-                    <span className="flex items-center gap-1"><Droplet size={14} /> {t.opacity}</span>
-                    <span>{Math.round(tapeOpacity * 100)}%</span>
+            <hr className="border-white/5" />
+
+            <section className="space-y-4">
+              <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
+                <Type size={16} /> {t.section2}
+              </h2>
+
+              <div className="flex gap-2">
+                <button onClick={() => setLabelStyle('dymo')}
+                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
+                    labelStyle === 'dymo' ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                  }`}>
+                  {t.styleDymo}
+                </button>
+                <button onClick={() => setLabelStyle('banner')}
+                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
+                    labelStyle === 'banner' ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                  }`}>
+                  {t.styleBanner}
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-neutral-500">{t.labelText}</label>
+                <input
+                  type="text" value={label} maxLength={30}
+                  onChange={e => setLabel(e.target.value)}
+                  className="w-full bg-[#09090b] border border-neutral-700/50 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all"
+                  placeholder={t.labelPlaceholder}
+                />
+              </div>
+
+              {label.trim() !== '' && (
+                <>
+                  <div className="space-y-2 pt-1">
+                    <label className="text-xs text-neutral-500">{t.font}</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {FONT_OPTIONS.map(opt => (
+                        <button key={opt.id} onClick={() => setFontFamily(opt.family)}
+                          className={`py-2 px-1 rounded-lg border text-xs transition-all ${
+                            fontFamily === opt.family ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                          }`} style={{ fontFamily: opt.family }}>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <input type="range" min="0.1" max="1" step="0.05" value={tapeOpacity} onChange={e => setTapeOpacity(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                </div>
-              </>
-            )}
-          </section>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs text-neutral-400">
+                      <span className="flex items-center gap-1"><Type size={13} /> {t.fontSize}</span>
+                      <span>{Math.round(fontSizeMultiplier * 100)}%</span>
+                    </div>
+                    <input type="range" min="0.4" max="1.6" step="0.05" value={fontSizeMultiplier} onChange={e => setFontSizeMultiplier(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                  </div>
+
+                  {labelStyle === 'dymo' && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs text-neutral-400">
+                        <span className="flex items-center gap-1"><RotateCw size={13} /> {t.tapeAngle}</span>
+                        <div className="flex items-center gap-1">
+                          <span>{tapeRotation.toFixed(1)}\u00b0</span>
+                          {tapeRotation !== -2.3 && (
+                            <button onClick={() => setTapeRotation(-2.3)} className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
+                              <RotateCcw size={10} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <input type="range" min="-15" max="15" step="0.5" value={tapeRotation} onChange={e => setTapeRotation(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                    </div>
+                  )}
+
+                  {labelStyle === 'dymo' && (
+                    <div className="flex items-center justify-between">
+                      <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                        <Move size={11} className="shrink-0" /> {t.dragHint}
+                      </p>
+                      {(tapeOffset.x !== 0 || tapeOffset.y !== 0) && (
+                        <button onClick={() => setTapeOffset({ x: 0, y: 0 })}
+                          className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0">
+                          <RotateCcw size={10} /> {t.resetBtn}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-2 pt-2">
+                    <label className="text-xs text-neutral-500 flex items-center gap-1">
+                      <Palette size={14} /> {labelStyle === 'banner' ? t.colorBanner : t.colorTape}
+                    </label>
+                    <div className="flex gap-3 items-center">
+                      {TAPE_COLORS.map(color => (
+                        <button key={color.id} onClick={() => setTapeColor(color.hex)}
+                          className={`relative w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${
+                            tapeColor === color.hex ? 'border-blue-500 scale-110' : 'border-transparent hover:scale-105'
+                          }`} style={{ backgroundColor: color.hex }} title={color.name}>
+                          {tapeColor === color.hex && <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => tapeColorInputRef.current?.click()}
+                        title={t.customColor}
+                        className={`relative w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
+                          !isPresetColor ? 'border-blue-500 scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
+                        }`}
+                        style={!isPresetColor ? { backgroundColor: tapeColor } : {}}
+                      >
+                        {isPresetColor
+                          ? <Palette size={12} className="text-neutral-400" />
+                          : <Check size={14} style={{ color: '#fff', mixBlendMode: 'difference' }} />
+                        }
+                      </button>
+                      <input
+                        ref={tapeColorInputRef}
+                        type="color"
+                        value={tapeColor}
+                        onChange={e => setTapeColor(e.target.value)}
+                        className="sr-only"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-4 border-t border-white/5">
+                    <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
+                      <span className="flex items-center gap-1"><Droplet size={14} /> {t.opacity}</span>
+                      <span>{Math.round(tapeOpacity * 100)}%</span>
+                    </div>
+                    <input type="range" min="0.1" max="1" step="0.05" value={tapeOpacity} onChange={e => setTapeOpacity(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
         </div>
 
-        <div className="mt-auto p-6 lg:p-8 pt-4 border-t border-white/5 bg-[#121214] shrink-0">
-          {/* Download dropdown */}
+        {/* Footer sticky — sempre visibile in fondo alla sidebar */}
+        <div className="shrink-0 p-6 lg:p-8 pt-4 border-t border-white/5 bg-[#121214]">
           <div ref={downloadMenuRef} className="relative w-full mb-6">
             <div className="flex w-full">
               <button
@@ -1019,7 +966,7 @@ export default function App() {
                   <Download size={15} className="text-neutral-400 shrink-0" />
                   <div>
                     <div className="font-medium">{t.downloadPng}</div>
-                    <div className="text-[11px] text-neutral-500">Universale, massima qualità</div>
+                    <div className="text-[11px] text-neutral-500">Universale, massima qualit\u00e0</div>
                   </div>
                 </button>
                 <div className="h-px bg-white/5" />
@@ -1041,7 +988,7 @@ export default function App() {
                   <Download size={15} className="text-neutral-400 shrink-0" />
                   <div>
                     <div className="font-medium">{t.downloadIco}</div>
-                    <div className="text-[11px] text-neutral-500">6 risoluzioni (16→256px)</div>
+                    <div className="text-[11px] text-neutral-500">6 risoluzioni (16\u2192256px)</div>
                   </div>
                 </button>
               </div>
