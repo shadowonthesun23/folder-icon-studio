@@ -501,7 +501,6 @@ export default function App() {
 
   const t = TRANSLATIONS[lang];
 
-  // Per cassette: usa CASSETTE_COLORS, per classic usa FOLDER_COLORS
   const activeColorPalette = folderShape === 'cassette' ? CASSETTE_COLORS : FOLDER_COLORS;
 
   const effectiveTintColor = folderShape === 'cassette'
@@ -516,7 +515,6 @@ export default function App() {
     };
   });
 
-  // Quando si passa a cassette: reset label, forza stile non-banner e non-badge, reset colore
   useEffect(() => {
     if (folderShape === 'cassette') {
       setLabel('');
@@ -722,7 +720,7 @@ export default function App() {
   };
 
   const handlePointerMove = (e) => {
-    if (!draggingRef.current) return;
+ryRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
@@ -802,33 +800,6 @@ export default function App() {
         offCtx.globalCompositeOperation = 'destination-in';
         offCtx.drawImage(cassetteMaskImg, 0, 0, off.width, off.height);
         ctx.drawImage(off, rectX, rectY);
-
-        // Inner shadow – depth effect on cassette label area
-        const shadowSize = Math.min(rectW, rectH) * 0.06;
-        // Top
-        const gTop = ctx.createLinearGradient(rectX, rectY, rectX, rectY + shadowSize);
-        gTop.addColorStop(0, 'rgba(0,0,0,0.45)');
-        gTop.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = gTop;
-        ctx.fillRect(rectX, rectY, rectW, shadowSize);
-        // Bottom
-        const gBottom = ctx.createLinearGradient(rectX, rectY + rectH - shadowSize, rectX, rectY + rectH);
-        gBottom.addColorStop(0, 'rgba(0,0,0,0)');
-        gBottom.addColorStop(1, 'rgba(0,0,0,0.45)');
-        ctx.fillStyle = gBottom;
-        ctx.fillRect(rectX, rectY + rectH - shadowSize, rectW, shadowSize);
-        // Left
-        const gLeft = ctx.createLinearGradient(rectX, rectY, rectX + shadowSize, rectY);
-        gLeft.addColorStop(0, 'rgba(0,0,0,0.35)');
-        gLeft.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = gLeft;
-        ctx.fillRect(rectX, rectY, shadowSize, rectH);
-        // Right
-        const gRight = ctx.createLinearGradient(rectX + rectW - shadowSize, rectY, rectX + rectW, rectY);
-        gRight.addColorStop(0, 'rgba(0,0,0,0)');
-        gRight.addColorStop(1, 'rgba(0,0,0,0.35)');
-        ctx.fillStyle = gRight;
-        ctx.fillRect(rectX + rectW - shadowSize, rectY, shadowSize, rectH);
       }
 
       if (cassetteOverlayImg) {
@@ -1028,7 +999,6 @@ export default function App() {
                     <Palette size={13} /> {folderShape === 'cassette' ? t.cassetteColor : t.folderColor}
                   </label>
                   <div className="flex flex-wrap gap-2 items-center">
-                    {/* Bottone Default */}
                     <button onClick={() => setFolderColorOverrideWithHistory(null)} title={t.defaultColor}
                       className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
                         folderColorOverride === null
@@ -1043,7 +1013,6 @@ export default function App() {
                     >
                       {folderColorOverride === null && <Check size={11} className="text-white" />}
                     </button>
-                    {/* Palette colori contestuale */}
                     {activeColorPalette.slice(1).map(color => (
                       <button key={color.id} onClick={() => setFolderColorOverrideWithHistory(color.hex)} title={color.name}
                         className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
@@ -1052,7 +1021,6 @@ export default function App() {
                         {folderColorOverride === color.hex && !isCustomFolderColor && <Check size={11} style={{ color: getTapeTextColor(color.hex) }} />}
                       </button>
                     ))}
-                    {/* Bottone colore custom */}
                     <button onClick={() => folderColorInputRef.current?.click()} title={t.customColor}
                       className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
                         isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
