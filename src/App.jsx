@@ -802,6 +802,33 @@ export default function App() {
         offCtx.globalCompositeOperation = 'destination-in';
         offCtx.drawImage(cassetteMaskImg, 0, 0, off.width, off.height);
         ctx.drawImage(off, rectX, rectY);
+
+        // Inner shadow – depth effect on cassette label area
+        const shadowSize = Math.min(rectW, rectH) * 0.06;
+        // Top
+        const gTop = ctx.createLinearGradient(rectX, rectY, rectX, rectY + shadowSize);
+        gTop.addColorStop(0, 'rgba(0,0,0,0.45)');
+        gTop.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gTop;
+        ctx.fillRect(rectX, rectY, rectW, shadowSize);
+        // Bottom
+        const gBottom = ctx.createLinearGradient(rectX, rectY + rectH - shadowSize, rectX, rectY + rectH);
+        gBottom.addColorStop(0, 'rgba(0,0,0,0)');
+        gBottom.addColorStop(1, 'rgba(0,0,0,0.45)');
+        ctx.fillStyle = gBottom;
+        ctx.fillRect(rectX, rectY + rectH - shadowSize, rectW, shadowSize);
+        // Left
+        const gLeft = ctx.createLinearGradient(rectX, rectY, rectX + shadowSize, rectY);
+        gLeft.addColorStop(0, 'rgba(0,0,0,0.35)');
+        gLeft.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gLeft;
+        ctx.fillRect(rectX, rectY, shadowSize, rectH);
+        // Right
+        const gRight = ctx.createLinearGradient(rectX + rectW - shadowSize, rectY, rectX + rectW, rectY);
+        gRight.addColorStop(0, 'rgba(0,0,0,0)');
+        gRight.addColorStop(1, 'rgba(0,0,0,0.35)');
+        ctx.fillStyle = gRight;
+        ctx.fillRect(rectX + rectW - shadowSize, rectY, shadowSize, rectH);
       }
 
       if (cassetteOverlayImg) {
