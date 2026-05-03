@@ -4,7 +4,7 @@ import { Analytics } from '@vercel/analytics/react';
 
 const TRANSLATIONS = {
   it: {
-    subtitle: 'Crea icone macOS customizzate.',
+    subtitle: 'Crea icone cartella macOS personalizzate.',
     section1: '1. Grafica',
     folderStyle: 'Stile cartella',
     folderColor: 'Colore cartella',
@@ -53,7 +53,7 @@ const TRANSLATIONS = {
     deletePreset: 'Elimina',
   },
   en: {
-    subtitle: 'Create custom macOS icons.',
+    subtitle: 'Create custom macOS folder icons.',
     section1: '1. Artwork',
     folderStyle: 'Folder style',
     folderColor: 'Folder color',
