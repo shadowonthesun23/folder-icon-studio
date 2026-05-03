@@ -115,6 +115,18 @@ const FOLDER_COLORS = [
   { id: 'gray', hex: '#8E8E93', name: 'Grigio' },
 ];
 
+const CASSETTE_COLORS = [
+  { id: 'default', hex: null, name: 'Default' },
+  { id: 'black', hex: '#1a1a1a', name: 'Nero' },
+  { id: 'white', hex: '#e8e4dc', name: 'Bianco' },
+  { id: 'red', hex: '#c0392b', name: 'Rosso' },
+  { id: 'blue', hex: '#2563a8', name: 'Blu' },
+  { id: 'green', hex: '#27613a', name: 'Verde' },
+  { id: 'yellow', hex: '#c8a832', name: 'Giallo' },
+  { id: 'orange', hex: '#c0622b', name: 'Arancione' },
+  { id: 'teal', hex: '#1a6b72', name: 'Teal' },
+];
+
 const CASSETTE_PNG_W = 2183;
 const CASSETTE_PNG_H = 1417;
 const CASSETTE_LABEL_X = 135;
@@ -302,7 +314,6 @@ const buildIco = async (canvas) => {
 
 // ─── Canvas drawing helpers ───────────────────────────────────────────────────
 
-// tapeScale scala proporzionalmente larghezza e altezza del nastro
 const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, tapeRotationDeg, fontSizeMultiplier, fontFamily, tapeScale = 1) => {
   const tapeW = w * 0.55 * tapeScale;
   const tapeH = h * 0.12 * tapeScale;
@@ -490,6 +501,9 @@ export default function App() {
 
   const t = TRANSLATIONS[lang];
 
+  // Per cassette: usa CASSETTE_COLORS, per classic usa FOLDER_COLORS
+  const activeColorPalette = folderShape === 'cassette' ? CASSETTE_COLORS : FOLDER_COLORS;
+
   const effectiveTintColor = folderShape === 'cassette'
     ? folderColorOverride
     : (folderColorOverride ?? dominantColor ?? null);
@@ -502,11 +516,12 @@ export default function App() {
     };
   });
 
-  // Quando si passa a cassette: reset label, forza stile non-banner e non-badge
+  // Quando si passa a cassette: reset label, forza stile non-banner e non-badge, reset colore
   useEffect(() => {
     if (folderShape === 'cassette') {
       setLabel('');
       setLabelStyle(prev => (prev === 'banner' || prev === 'badge') ? 'dymo' : prev);
+      setFolderColorOverride(null);
     }
   }, [folderShape]);
 
@@ -687,7 +702,6 @@ export default function App() {
     const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
     const x = (e.clientX - rect.left) * scaleX, y = (e.clientY - rect.top) * scaleY;
     if (labelStyle === 'dymo') {
-      // Hit-box aggiornato con tapeScale
       const tapeW = canvas.width * 0.55 * tapeScale;
       const tapeH = canvas.height * 0.12 * tapeScale;
       const tX = canvas.width / 2 - tapeW / 2 + tapeOffset.x;
@@ -880,7 +894,7 @@ export default function App() {
   };
 
   const isPresetColor = TAPE_COLORS.some(c => c.hex === tapeColor);
-  const isCustomFolderColor = folderColorOverride !== null && !FOLDER_COLORS.slice(1).some(c => c.hex === folderColorOverride);
+  const isCustomFolderColor = folderColorOverride !== null && !activeColorPalette.slice(1).some(c => c.hex === folderColorOverride);
 
   const setLabelWithHistory = (v) => { setLabel(v); pushDebounced('label', makeSnapshot({ ...stateRef.current, label: v })); };
   const setLabelStyleWithHistory = (v) => { setLabelStyle(v); pushHistory(makeSnapshot({ ...stateRef.current, labelStyle: v })); };
@@ -987,13 +1001,23 @@ export default function App() {
                     <Palette size={13} /> {folderShape === 'cassette' ? t.cassetteColor : t.folderColor}
                   </label>
                   <div className="flex flex-wrap gap-2 items-center">
+                    {/* Bottone Default */}
                     <button onClick={() => setFolderColorOverrideWithHistory(null)} title={t.defaultColor}
                       className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-                        folderColorOverride === null ? 'border-blue-500 scale-110 bg-[#4B8EF0] text-white' : 'border-neutral-600 bg-gradient-to-br from-[#6aadff] to-[#2171e8] hover:scale-105'
-                      }`}>
-                      {folderColorOverride === null && <Check size={11} />}
+                        folderColorOverride === null
+                          ? 'border-blue-500 scale-110'
+                          : 'border-neutral-600 hover:scale-105'
+                      }`}
+                      style={
+                        folderShape === 'cassette'
+                          ? { background: 'linear-gradient(135deg, #8B7355 0%, #5c4a32 50%, #3a2e1f 100%)' }
+                          : { background: 'linear-gradient(135deg, #6aadff 0%, #2171e8 100%)' }
+                      }
+                    >
+                      {folderColorOverride === null && <Check size={11} className="text-white" />}
                     </button>
-                    {FOLDER_COLORS.slice(1).map(color => (
+                    {/* Palette colori contestuale */}
+                    {activeColorPalette.slice(1).map(color => (
                       <button key={color.id} onClick={() => setFolderColorOverrideWithHistory(color.hex)} title={color.name}
                         className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
                           folderColorOverride === color.hex && !isCustomFolderColor ? 'border-white scale-110' : 'border-transparent hover:scale-105'
@@ -1001,6 +1025,7 @@ export default function App() {
                         {folderColorOverride === color.hex && !isCustomFolderColor && <Check size={11} style={{ color: getTapeTextColor(color.hex) }} />}
                       </button>
                     ))}
+                    {/* Bottone colore custom */}
                     <button onClick={() => folderColorInputRef.current?.click()} title={t.customColor}
                       className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
                         isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
@@ -1063,7 +1088,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Dimensione testo */}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-xs text-neutral-400">
                       <span className="flex items-center gap-1"><Type size={13} /> {t.fontSize}</span>
@@ -1074,7 +1098,6 @@ export default function App() {
                       className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   </div>
 
-                  {/* Dimensione nastro (solo Dymo) */}
                   {labelStyle === 'dymo' && (
                     <div className="space-y-2">
                       <div className="flex justify-between items-center text-xs text-neutral-400">
