@@ -720,7 +720,7 @@ export default function App() {
   };
 
   const handlePointerMove = (e) => {
-ryRef.current) return;
+    if (!draggingRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
