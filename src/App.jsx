@@ -343,27 +343,17 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, t
   ctx.fillText(text, x + tapeW / 2, y + tapeH / 2);
   ctx.restore();
 };
-const drawBanner = (ctx, rectX, rectY, rectW, rectH, text, tapeHex, opacity, fontSizeMultiplier, fontFamily) => {
-const bannerH = rectH * 0.30;
-const bannerY = rectY + rectH - bannerH;
 
-ctx.save();
-
-// Applica la maschera di ritaglio della cartella
-if (FOLDERS.classic.buildFlapPath) {
-  FOLDERS.classic.buildFlapPath(ctx, { x: rectX, y: rectY, w: rectW, h: rectH });
-  ctx.clip();
-}
-
-ctx.globalAlpha = opacity; 
-ctx.fillStyle = tapeHex;
-
-// Disegna un rettangolo semplice. Il clip() eliminerà il colore fuori dai bordi curvi.
-ctx.beginPath();
-ctx.rect(rectX, bannerY, rectW, bannerH);
-ctx.fill();
-
-ctx.globalAlpha = 1;
+const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontSizeMultiplier, fontFamily) => {
+  const { clipRect } = shape;
+  const scaleX = folderRect.w / clipRect.vw, scaleY = folderRect.h / clipRect.vh;
+  const rectX = folderRect.x + clipRect.x * scaleX, rectY = folderRect.y + clipRect.y * scaleY;
+  const rectW = clipRect.w * scaleX, rectH = clipRect.h * scaleY;
+  const bannerH = rectH * 0.30, bannerY = rectY + rectH - bannerH;
+  ctx.save();
+  ctx.globalAlpha = opacity; ctx.fillStyle = tapeHex;
+  ctx.fillRect(rectX, bannerY, rectW, bannerH);
+  ctx.globalAlpha = 1;
   ctx.fillStyle = getTapeTextColor(tapeHex);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const words = text.split(' ');
@@ -473,4 +463,927 @@ export default function App() {
   const [fontFamily, setFontFamily] = useState('Space Mono');
   const [dominantColor, setDominantColor] = useState(null);
   const [folderColorOverride, setFolderColorOverride] = useState(null);
- const [customFolderColor, setCustomFolderColor] = useState('#4B8EF0');
+  const [customFolderColor, setCustomFolderColor] = useState('#4B8EF0');
+  const [folderShape, setFolderShape] = useState('classic');
+  const [coverOffset, setCoverOffset] = useState({ x: 0, y: 0 });
+  const [coverScale, setCoverScale] = useState(1);
+  const [coverRotation, setCoverRotation] = useState(0);
+  const [tapeOffset, setTapeOffset] = useState({ x: 0, y: 0 });
+  const [badgeOffset, setBadgeOffset] = useState({ x: 0, y: 0 });
+  const [badgeSize, setBadgeSize] = useState(160);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const draggingRef = useRef(null);
+  const dragStartPosRef = useRef({ x: 0, y: 0 });
+  const folderColorInputRef = useRef(null);
+  const tapeColorInputRef = useRef(null);
+  const historyRef = useRef([]);
+  const historyIndexRef = useRef(0);
+  const sliderDebounceRef = useRef({});
+  const isRestoringRef = useRef(false);
+
+  const [presets, setPresets] = useState(() => loadPresetsFromStorage());
+  const [presetName, setPresetName] = useState('');
+  const [presetsOpen, setPresetsOpen] = useState(false);
+  const [section3HintVisible, setSection3HintVisible] = useState(false);
+
+  const stateRef = useRef({
+    label: 'Archivio 01', labelStyle: 'dymo', tapeColor: '#f4ebd0', tapeOpacity: 1,
+    tapeRotation: -2.3, tapeScale: 1, fontSizeMultiplier: 1, fontFamily: 'Space Mono',
+    tapeOffset: { x: 0, y: 0 }, badgeOffset: { x: 0, y: 0 }, badgeSize: 160,
+    coverOffset: { x: 0, y: 0 }, coverScale: 1, coverRotation: 0, folderColorOverride: null,
+  });
+
+  const [lang, setLang] = useState(() => {
+    try { return localStorage.getItem('fis_lang') || 'it'; } catch { return 'it'; }
+  });
+
+  const t = TRANSLATIONS[lang];
+
+  const activeColorPalette = folderShape === 'cassette' ? CASSETTE_COLORS : FOLDER_COLORS;
+
+  const effectiveTintColor = folderShape === 'cassette'
+    ? folderColorOverride
+    : (folderColorOverride ?? dominantColor ?? null);
+
+  useEffect(() => {
+    stateRef.current = {
+      label, labelStyle, tapeColor, tapeOpacity, tapeRotation, tapeScale,
+      fontSizeMultiplier, fontFamily, tapeOffset, badgeOffset, badgeSize,
+      coverOffset, coverScale, coverRotation, folderColorOverride,
+    };
+  });
+
+  useEffect(() => {
+    if (folderShape === 'cassette') {
+      setLabel('');
+      setLabelStyle(prev => (prev === 'banner' || prev === 'badge') ? 'dymo' : prev);
+      setFolderColorOverride(null);
+    }
+  }, [folderShape]);
+
+  const pushHistory = useCallback((snap) => {
+    if (isRestoringRef.current) return;
+    const stack = historyRef.current;
+    const idx = historyIndexRef.current;
+    const newStack = stack.slice(0, idx + 1);
+    newStack.push(snap);
+    if (newStack.length > HISTORY_CAP) newStack.shift();
+    historyRef.current = newStack;
+    historyIndexRef.current = newStack.length - 1;
+    setHistoryIndex(newStack.length - 1);
+  }, []);
+
+  const applySnapshot = useCallback((snap) => {
+    isRestoringRef.current = true;
+    setLabel(snap.label); setLabelStyle(snap.labelStyle); setTapeColor(snap.tapeColor);
+    setTapeOpacity(snap.tapeOpacity); setTapeRotation(snap.tapeRotation);
+    setTapeScale(snap.tapeScale ?? 1);
+    setFontSizeMultiplier(snap.fontSizeMultiplier); setFontFamily(snap.fontFamily);
+    setTapeOffset(snap.tapeOffset); setBadgeOffset(snap.badgeOffset); setBadgeSize(snap.badgeSize);
+    setCoverOffset(snap.coverOffset); setCoverScale(snap.coverScale); setCoverRotation(snap.coverRotation);
+    setFolderColorOverride(snap.folderColorOverride);
+    setTimeout(() => { isRestoringRef.current = false; }, 0);
+  }, []);
+
+  const undo = useCallback(() => {
+    const idx = historyIndexRef.current;
+    if (idx <= 0) return;
+    const newIdx = idx - 1;
+    historyIndexRef.current = newIdx; setHistoryIndex(newIdx);
+    applySnapshot(historyRef.current[newIdx]);
+  }, [applySnapshot]);
+
+  const redo = useCallback(() => {
+    const idx = historyIndexRef.current;
+    const stack = historyRef.current;
+    if (idx >= stack.length - 1) return;
+    const newIdx = idx + 1;
+    historyIndexRef.current = newIdx; setHistoryIndex(newIdx);
+    applySnapshot(stack[newIdx]);
+  }, [applySnapshot]);
+
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < historyRef.current.length - 1;
+
+  useEffect(() => {
+    if (historyRef.current.length === 0) {
+      historyRef.current = [makeSnapshot(stateRef.current)];
+      historyIndexRef.current = 0;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pushDebounced = useCallback((key, snap) => {
+    if (sliderDebounceRef.current[key]) clearTimeout(sliderDebounceRef.current[key]);
+    sliderDebounceRef.current[key] = setTimeout(() => { pushHistory(snap); }, 600);
+  }, [pushHistory]);
+
+  const handleSavePreset = () => {
+    const name = presetName.trim() || `Stile ${presets.length + 1}`;
+    const thumbnail = captureThumbnail(canvasRef.current);
+    const newPreset = { id: Date.now(), name, thumbnail, ...makeSnapshot(stateRef.current) };
+    const updated = [...presets, newPreset];
+    setPresets(updated); savePresetsToStorage(updated); setPresetName('');
+  };
+
+  const handleApplyPreset = (preset) => {
+    const { id, name, thumbnail, ...snap } = preset;
+    applySnapshot(snap); pushHistory(makeSnapshot(snap));
+  };
+
+  const handleDeletePreset = (id) => {
+    const updated = presets.filter(p => p.id !== id);
+    setPresets(updated); savePresetsToStorage(updated);
+  };
+
+  useEffect(() => {
+    const handler = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo]);
+
+  const switchLang = (l) => { setLang(l); try { localStorage.setItem('fis_lang', l); } catch {} };
+
+  useEffect(() => {
+    if (!downloadMenuOpen) return;
+    const handler = (e) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) setDownloadMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [downloadMenuOpen]);
+
+  const handleClearImage = () => {
+    if (coverSrc && coverSrc.startsWith('blob:')) URL.revokeObjectURL(coverSrc);
+    setCoverSrc(null); setCoverImg(null);
+    setCoverOffset({ x: 0, y: 0 }); setCoverScale(1); setCoverRotation(0); setDominantColor(null);
+  };
+
+  const updateCursor = (isDragging) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.style.cursor = isDragging ? 'grabbing' : coverSrc ? 'grab' : 'default';
+  };
+
+  useEffect(() => { updateCursor(false); }, [coverSrc]);
+
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&family=Playfair+Display:wght@700&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+  }, []);
+
+  useEffect(() => {
+    setBaseImgData(null);
+    if (folderShape === 'cassette') return;
+    loadSvgAsImage(FOLDERS[folderShape].svg)
+      .then(img => setBaseImgData(img))
+      .catch(err => console.error('Folder load error:', err));
+  }, [folderShape]);
+
+  useEffect(() => {
+    if (folderShape !== 'cassette') return;
+    setCassetteBaseImg(null); setCassetteOverlayImg(null); setCassetteMaskImg(null);
+    Promise.all([
+      loadPngAsImage('/cassette-base.png'),
+      loadPngAsImage('/cassette-overlay.png'),
+      new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('maschera.svg load failed'));
+        img.src = '/maschera.svg';
+      }),
+    ]).then(([base, overlay, mask]) => {
+      setCassetteBaseImg(base); setCassetteOverlayImg(overlay); setCassetteMaskImg(mask);
+    }).catch(err => console.error('Cassette asset load error:', err));
+  }, [folderShape]);
+
+  useEffect(() => {
+    if (!coverSrc) { setCoverImg(null); return; }
+    setCoverImg(null);
+    const img = new Image();
+    img.onload = () => setCoverImg(img);
+    img.src = coverSrc;
+  }, [coverSrc]);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (coverSrc && coverSrc.startsWith('blob:')) URL.revokeObjectURL(coverSrc);
+    const objectUrl = URL.createObjectURL(file);
+    setCoverSrc(objectUrl); setCoverOffset({ x: 0, y: 0 }); setCoverScale(1); setCoverRotation(0);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+      const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, 64, 64);
+      const data = ctx.getImageData(0, 0, 64, 64).data;
+      let r = 0, g = 0, b = 0; const n = data.length / 4;
+      for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i+1]; b += data[i+2]; }
+      setDominantColor(rgbToHex(Math.round(r/n), Math.round(g/n), Math.round(b/n)));
+    };
+    img.src = objectUrl;
+    e.target.value = '';
+  };
+
+  const handlePointerDown = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX, y = (e.clientY - rect.top) * scaleY;
+    if (labelStyle === 'dymo') {
+      const tapeW = canvas.width * 0.55 * tapeScale;
+      const tapeH = canvas.height * 0.12 * tapeScale;
+      const tX = canvas.width / 2 - tapeW / 2 + tapeOffset.x;
+      const tY = canvas.height * 0.55 - tapeH / 2 + tapeOffset.y;
+      if (label.trim() !== '' && x >= tX && x <= tX + tapeW && y >= tY && y <= tY + tapeH) draggingRef.current = 'tape';
+      else if (coverSrc) draggingRef.current = 'cover';
+    } else if (labelStyle === 'badge') {
+      const bcx = canvas.width / 2 + badgeOffset.x, bcy = canvas.height * 0.72 + badgeOffset.y;
+      const dist = Math.sqrt((x - bcx) ** 2 + (y - bcy) ** 2);
+      if (label.trim() !== '' && dist <= badgeSize) draggingRef.current = 'badge';
+      else if (coverSrc) draggingRef.current = 'cover';
+    } else if (coverSrc) {
+      draggingRef.current = 'cover';
+    }
+    if (draggingRef.current) updateCursor(true);
+    dragStartPosRef.current = { x: e.clientX, y: e.clientY };
+    if (e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!draggingRef.current) return;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    const dx = (e.clientX - dragStartPosRef.current.x) * scaleX;
+    const dy = (e.clientY - dragStartPosRef.current.y) * scaleY;
+    if (draggingRef.current === 'tape') setTapeOffset(p => ({ x: p.x + dx, y: p.y + dy }));
+    else if (draggingRef.current === 'badge') setBadgeOffset(p => ({ x: p.x + dx, y: p.y + dy }));
+    else if (draggingRef.current === 'cover') setCoverOffset(p => ({ x: p.x + dx, y: p.y + dy }));
+    dragStartPosRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handlePointerUp = useCallback((e) => {
+    const wasTarget = draggingRef.current;
+    draggingRef.current = null;
+    updateCursor(false);
+    if (e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId);
+    if (wasTarget) requestAnimationFrame(() => pushHistory(makeSnapshot(stateRef.current)));
+  }, [pushHistory]);
+
+  // ─── Main render ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (folderShape === 'cassette') {
+      if (!cassetteBaseImg || !cassetteMaskImg) return;
+    } else {
+      if (!baseImgData) return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    const shape = FOLDERS[folderShape];
+    const folderRect = shape.getFolderRect(w, h);
+
+    ctx.clearRect(0, 0, w, h);
+
+    if (folderShape === 'cassette') {
+      if (effectiveTintColor) {
+        const offCassette = document.createElement('canvas');
+        offCassette.width = w; offCassette.height = h;
+        const offCtx = offCassette.getContext('2d');
+        offCtx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        offCtx.globalCompositeOperation = 'multiply';
+        offCtx.fillStyle = effectiveTintColor;
+        offCtx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        offCtx.globalCompositeOperation = 'destination-in';
+        offCtx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        ctx.drawImage(offCassette, 0, 0);
+      } else {
+        ctx.drawImage(cassetteBaseImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+      }
+
+      if (coverImg) {
+        const sX = folderRect.w / CASSETTE_PNG_W;
+        const sY = folderRect.h / CASSETTE_PNG_H;
+        const rectX = folderRect.x + CASSETTE_LABEL_X * sX;
+        const rectY = folderRect.y + CASSETTE_LABEL_Y * sY;
+        const rectW = CASSETTE_LABEL_W * sX;
+        const rectH = CASSETTE_LABEL_H * sY;
+        const imgRatio = coverImg.width / coverImg.height;
+        const areaRatio = rectW / rectH;
+        let drawW, drawH;
+        if (imgRatio > areaRatio) { drawH = rectH * coverScale; drawW = drawH * imgRatio; }
+        else { drawW = rectW * coverScale; drawH = drawW / imgRatio; }
+        const drawX = (rectW - drawW) / 2 + coverOffset.x;
+        const drawY = (rectH - drawH) / 2 + coverOffset.y;
+        const off = document.createElement('canvas');
+        off.width = Math.round(rectW); off.height = Math.round(rectH);
+        const offCtx = off.getContext('2d');
+        offCtx.imageSmoothingEnabled = true; offCtx.imageSmoothingQuality = 'high';
+        offCtx.save();
+        offCtx.translate(drawX + drawW / 2, drawY + drawH / 2);
+        offCtx.rotate((coverRotation * Math.PI) / 180);
+        offCtx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
+        offCtx.drawImage(coverImg, drawX, drawY, drawW, drawH);
+        offCtx.restore();
+        offCtx.globalCompositeOperation = 'destination-in';
+        offCtx.drawImage(cassetteMaskImg, 0, 0, off.width, off.height);
+        ctx.drawImage(off, rectX, rectY);
+      }
+
+      if (cassetteOverlayImg) {
+        ctx.drawImage(cassetteOverlayImg, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+      }
+
+    } else {
+      if (shape.tintFolder && effectiveTintColor) {
+        const offscreen = document.createElement('canvas');
+        offscreen.width = w; offscreen.height = h;
+        const offCtx = offscreen.getContext('2d');
+        offCtx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        offCtx.globalCompositeOperation = 'color';
+        offCtx.fillStyle = effectiveTintColor;
+        offCtx.fillRect(folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        offCtx.globalCompositeOperation = 'destination-in';
+        offCtx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+        ctx.drawImage(offscreen, 0, 0);
+      } else {
+        ctx.drawImage(baseImgData, folderRect.x, folderRect.y, folderRect.w, folderRect.h);
+      }
+      if (coverImg) {
+        ctx.save();
+        shape.buildFlapPath(ctx, folderRect); ctx.clip();
+        const { clipRect } = shape;
+        const rectX = folderRect.x + clipRect.x * (folderRect.w / clipRect.vw);
+        const rectY = folderRect.y + clipRect.y * (folderRect.h / clipRect.vh);
+        const rectW = clipRect.w * (folderRect.w / clipRect.vw);
+        const rectH = clipRect.h * (folderRect.h / clipRect.vh);
+        const imgRatio = coverImg.width / coverImg.height;
+        const canvasRatio = rectW / rectH;
+        let drawW, drawH;
+        if (imgRatio > canvasRatio) { drawH = rectH * coverScale; drawW = drawH * imgRatio; }
+        else { drawW = rectW * coverScale; drawH = drawW / imgRatio; }
+        const drawX = rectX + (rectW - drawW) / 2 + coverOffset.x;
+        const drawY = rectY + (rectH - drawH) / 2 + coverOffset.y;
+        ctx.save();
+        ctx.translate(drawX + drawW / 2, drawY + drawH / 2);
+        ctx.rotate((coverRotation * Math.PI) / 180);
+        ctx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
+        ctx.drawImage(coverImg, drawX, drawY, drawW, drawH);
+        ctx.restore();
+        const shadow = ctx.createLinearGradient(0, rectY, 0, rectY + rectH);
+        shadow.addColorStop(0, 'rgba(255,255,255,0.15)'); shadow.addColorStop(0.1, 'rgba(0,0,0,0)');
+        shadow.addColorStop(0.9, 'rgba(0,0,0,0)'); shadow.addColorStop(1, 'rgba(0,0,0,0.35)');
+        ctx.fillStyle = shadow; ctx.fillRect(rectX, rectY, rectW, rectH);
+        ctx.restore();
+      }
+    }
+
+    if (label.trim() !== '') {
+      if (labelStyle === 'dymo') drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily, tapeScale);
+      else if (labelStyle === 'banner') drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
+      else if (labelStyle === 'badge') drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
+    }
+  }, [baseImgData, cassetteBaseImg, cassetteOverlayImg, cassetteMaskImg, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, tapeScale, fontSizeMultiplier, fontFamily]);
+
+  const getFileName = () => (label.trim() === '' ? 'icon' : label).replace(/\s+/g, '_').toLowerCase();
+
+  const handleDownloadPng = () => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = `folder_${getFileName()}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click(); setDownloadMenuOpen(false);
+  };
+
+  const handleDownloadIcns = async () => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    setIsExporting(true); setDownloadMenuOpen(false);
+    try {
+      const blob = await buildIcns(canvas);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `folder_${getFileName()}.icns`; link.href = url; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } finally { setIsExporting(false); }
+  };
+
+  const handleDownloadIco = async () => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    setIsExporting(true); setDownloadMenuOpen(false);
+    try {
+      const blob = await buildIco(canvas);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `folder_${getFileName()}.ico`; link.href = url; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } finally { setIsExporting(false); }
+  };
+
+  const isPresetColor = TAPE_COLORS.some(c => c.hex === tapeColor);
+  const isCustomFolderColor = folderColorOverride !== null && !activeColorPalette.slice(1).some(c => c.hex === folderColorOverride);
+
+  const setLabelWithHistory = (v) => { setLabel(v); pushDebounced('label', makeSnapshot({ ...stateRef.current, label: v })); };
+  const setLabelStyleWithHistory = (v) => { setLabelStyle(v); pushHistory(makeSnapshot({ ...stateRef.current, labelStyle: v })); };
+  const setTapeColorWithHistory = (v) => { setTapeColor(v); pushHistory(makeSnapshot({ ...stateRef.current, tapeColor: v })); };
+  const setTapeOpacityWithHistory = (v) => { setTapeOpacity(v); pushDebounced('opacity', makeSnapshot({ ...stateRef.current, tapeOpacity: v })); };
+  const setTapeRotationWithHistory = (v) => { setTapeRotation(v); pushDebounced('tapeRotation', makeSnapshot({ ...stateRef.current, tapeRotation: v })); };
+  const setTapeScaleWithHistory = (v) => { setTapeScale(v); pushDebounced('tapeScale', makeSnapshot({ ...stateRef.current, tapeScale: v })); };
+  const setFontSizeMultiplierWithHistory = (v) => { setFontSizeMultiplier(v); pushDebounced('fontSize', makeSnapshot({ ...stateRef.current, fontSizeMultiplier: v })); };
+  const setFontFamilyWithHistory = (v) => { setFontFamily(v); pushHistory(makeSnapshot({ ...stateRef.current, fontFamily: v })); };
+  const setBadgeSizeWithHistory = (v) => { setBadgeSize(v); pushDebounced('badgeSize', makeSnapshot({ ...stateRef.current, badgeSize: v })); };
+  const setFolderColorOverrideWithHistory = (v) => { setFolderColorOverride(v); pushHistory(makeSnapshot({ ...stateRef.current, folderColorOverride: v })); };
+  const setCoverScaleWithHistory = (v) => { setCoverScale(v); pushDebounced('coverScale', makeSnapshot({ ...stateRef.current, coverScale: v })); };
+  const setCoverRotationWithHistory = (v) => { setCoverRotation(v); pushDebounced('coverRotation', makeSnapshot({ ...stateRef.current, coverRotation: v })); };
+
+  return (
+    <div className="flex flex-col lg:flex-row h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-hidden">
+      <span style={{ fontFamily: 'Space Mono', position: 'absolute', opacity: 0, pointerEvents: 'none' }}>.</span>
+
+      <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[45dvh] lg:h-full overflow-hidden">
+        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+          <div className="relative p-6 lg:p-8 pb-4 lg:pb-6 border-b border-white/5 shrink-0">
+            <div className="absolute top-4 right-5 lg:top-5 lg:right-7 flex items-center gap-0.5 bg-[#09090b] border border-neutral-800 rounded-md p-0.5">
+              {['it', 'en'].map(l => (
+                <button key={l} onClick={() => switchLang(l)}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide transition-all ${
+                    lang === l ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'
+                  }`}>{l.toUpperCase()}</button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="Folder Icon Studio" className="w-8 h-8 lg:w-10 lg:h-10 object-contain shrink-0" />
+              <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-white">Folder Icon Studio</h1>
+            </div>
+            <p className="text-neutral-400 text-xs lg:text-sm mt-1">{t.subtitle}</p>
+          </div>
+
+          <div className="p-6 lg:p-8 flex flex-col gap-6 lg:gap-8">
+            <section className="space-y-4">
+              <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
+                <LucideImage size={16} /> {t.section1}
+              </h2>
+              <div className="space-y-2">
+                <label className="text-xs text-neutral-500">{t.folderStyle}</label>
+                <div className="flex gap-2">
+                  {Object.values(FOLDERS).map(f => (
+                    <button key={f.id} onClick={() => setFolderShape(f.id)}
+                      className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
+                        folderShape === f.id ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                      }`}>{f.name}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="relative">
+                <label
+                  className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all border border-dashed rounded-xl cursor-pointer group overflow-hidden relative"
+                  style={coverSrc ? { backgroundImage: `url(${coverSrc})`, backgroundSize: 'cover', backgroundPosition: 'center', borderColor: 'rgba(255,255,255,0.15)' } : { backgroundColor: '#09090b', borderColor: 'rgba(255,255,255,0.15)' }}
+                >
+                  {coverSrc && <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors" />}
+                  {!coverSrc && <div className="absolute inset-0 group-hover:bg-blue-500/5 transition-colors rounded-xl" />}
+                  <div className="relative z-10 flex flex-col items-center space-y-2 text-center">
+                    <div className={`p-3 rounded-full transition-colors ${coverSrc ? 'bg-white/10 group-hover:bg-white/20' : 'bg-neutral-800 group-hover:bg-blue-500/20'}`}>
+                      <Upload size={20} className={coverSrc ? 'text-white' : 'text-neutral-400 group-hover:text-blue-400'} />
+                    </div>
+                    <span className={`font-medium text-sm ${coverSrc ? 'text-white' : 'text-neutral-300'}`}>{coverSrc ? t.changeImage : t.uploadImage}</span>
+                    <span className={`text-xs ${coverSrc ? 'text-white/60' : 'text-neutral-500'}`}>{t.uploadFormats}</span>
+                  </div>
+                  <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                </label>
+                {coverSrc && (
+                  <button onClick={handleClearImage} title={t.removeImage}
+                    className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-neutral-800 hover:bg-red-500/80 text-neutral-400 hover:text-white transition-all z-20">
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {coverSrc && (
+                <div className="bg-[#09090b] p-4 rounded-xl border border-neutral-800/50 space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
+                      <span className="flex items-center gap-1"><ZoomIn size={14} /> {t.zoom}</span>
+                      <span>{Math.round(coverScale * 100)}%</span>
+                    </div>
+                    <input type="range" min="0.5" max="2.5" step="0.05" value={coverScale}
+                      onChange={e => setCoverScaleWithHistory(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
+                      <span className="flex items-center gap-1"><RotateCw size={14} /> {t.coverRotation}</span>
+                      <span>{coverRotation}°</span>
+                    </div>
+                    <input type="range" min="-180" max="180" step="1" value={coverRotation}
+                      onChange={e => setCoverRotationWithHistory(parseInt(e.target.value))}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                  </div>
+                </div>
+              )}
+
+              {FOLDERS[folderShape].tintFolder && (
+                <div className="space-y-2">
+                  <label className="text-xs text-neutral-500 flex items-center gap-1">
+                    <Palette size={13} /> {folderShape === 'cassette' ? t.cassetteColor : t.folderColor}
+                  </label>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <button onClick={() => setFolderColorOverrideWithHistory(null)} title={t.defaultColor}
+                      className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                        folderColorOverride === null
+                          ? 'border-blue-500 scale-110'
+                          : 'border-neutral-600 hover:scale-105'
+                      }`}
+                      style={
+                        folderShape === 'cassette'
+                          ? { background: 'linear-gradient(135deg, #8B7355 0%, #5c4a32 50%, #3a2e1f 100%)' }
+                          : { background: 'linear-gradient(135deg, #6aadff 0%, #2171e8 100%)' }
+                      }
+                    >
+                      {folderColorOverride === null && <Check size={11} className="text-white" />}
+                    </button>
+                    {activeColorPalette.slice(1).map(color => (
+                      <button key={color.id} onClick={() => setFolderColorOverrideWithHistory(color.hex)} title={color.name}
+                        className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                          folderColorOverride === color.hex && !isCustomFolderColor ? 'border-white scale-110' : 'border-transparent hover:scale-105'
+                        }`} style={{ backgroundColor: color.hex }}>
+                        {folderColorOverride === color.hex && !isCustomFolderColor && <Check size={11} style={{ color: getTapeTextColor(color.hex) }} />}
+                      </button>
+                    ))}
+                    <button onClick={() => folderColorInputRef.current?.click()} title={t.customColor}
+                      className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
+                        isCustomFolderColor ? 'border-white scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
+                      }`} style={isCustomFolderColor ? { backgroundColor: folderColorOverride } : {}}>
+                      {isCustomFolderColor ? <Check size={11} style={{ color: '#fff', mixBlendMode: 'difference' }} /> : <Palette size={11} className="text-neutral-400" />}
+                    </button>
+                    <input ref={folderColorInputRef} type="color"
+                      value={isCustomFolderColor ? folderColorOverride : customFolderColor}
+                      onChange={e => { setCustomFolderColor(e.target.value); setFolderColorOverrideWithHistory(e.target.value); }}
+                      className="sr-only" />
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <hr className="border-white/5" />
+
+            <section className="space-y-4">
+              <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
+                <Type size={16} /> {t.section2}
+              </h2>
+              <div className="flex gap-2">
+                {['dymo', 'banner', 'badge'].map(style => {
+                  const isDisabled = (style === 'banner' || style === 'badge') && folderShape === 'cassette';
+                  return (
+                    <button key={style}
+                      onClick={() => !isDisabled && setLabelStyleWithHistory(style)}
+                      disabled={isDisabled}
+                      className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
+                        isDisabled
+                          ? 'border-neutral-800/30 bg-[#09090b]/40 text-neutral-700 cursor-not-allowed'
+                          : labelStyle === style
+                            ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                            : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                      }`}>
+                      {t[`style${style.charAt(0).toUpperCase()}${style.slice(1)}`]}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-neutral-500">{t.labelText}</label>
+                <input type="text" value={label} maxLength={30} onChange={e => setLabelWithHistory(e.target.value)}
+                  className="w-full bg-[#09090b] border border-neutral-700/50 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all"
+                  placeholder={t.labelPlaceholder} />
+              </div>
+              {label.trim() !== '' && (
+                <>
+                  <div className="space-y-2 pt-1">
+                    <label className="text-xs text-neutral-500">{t.font}</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {FONT_OPTIONS.map(opt => (
+                        <button key={opt.id} onClick={() => setFontFamilyWithHistory(opt.family)}
+                          className={`py-2 px-1 rounded-lg border text-xs transition-all ${
+                            fontFamily === opt.family ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-neutral-700/50 bg-[#09090b] text-neutral-400 hover:border-neutral-500'
+                          }`} style={{ fontFamily: opt.family }}>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs text-neutral-400">
+                      <span className="flex items-center gap-1"><Type size={13} /> {t.fontSize}</span>
+                      <span>{Math.round(fontSizeMultiplier * 100)}%</span>
+                    </div>
+                    <input type="range" min="0.4" max="1.6" step="0.05" value={fontSizeMultiplier}
+                      onChange={e => setFontSizeMultiplierWithHistory(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                  </div>
+
+                  {labelStyle === 'dymo' && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs text-neutral-400">
+                        <span className="flex items-center gap-1"><Maximize2 size={13} /> {t.tapeSize}</span>
+                        <div className="flex items-center gap-1">
+                          <span>{Math.round(tapeScale * 100)}%</span>
+                          {tapeScale !== 1 && (
+                            <button onClick={() => { setTapeScale(1); pushHistory(makeSnapshot({ ...stateRef.current, tapeScale: 1 })); }}
+                              className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
+                              <RotateCcw size={10} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <input type="range" min="0.4" max="2" step="0.05" value={tapeScale}
+                        onChange={e => setTapeScaleWithHistory(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                    </div>
+                  )}
+
+                  {labelStyle === 'dymo' && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs text-neutral-400">
+                        <span className="flex items-center gap-1"><RotateCw size={13} /> {t.tapeAngle}</span>
+                        <div className="flex items-center gap-1">
+                          <span>{tapeRotation.toFixed(1)}°</span>
+                          {tapeRotation !== -2.3 && (
+                            <button onClick={() => { setTapeRotation(-2.3); pushHistory(makeSnapshot({ ...stateRef.current, tapeRotation: -2.3 })); }}
+                              className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
+                              <RotateCcw size={10} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <input type="range" min="-15" max="15" step="0.5" value={tapeRotation}
+                        onChange={e => setTapeRotationWithHistory(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                    </div>
+                  )}
+                  {labelStyle === 'badge' && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs text-neutral-400">
+                        <span className="flex items-center gap-1"><Circle size={13} /> {t.badgeSize}</span>
+                        <div className="flex items-center gap-1">
+                          <span>{badgeSize}px</span>
+                          {badgeSize !== 160 && (
+                            <button onClick={() => { setBadgeSize(160); pushHistory(makeSnapshot({ ...stateRef.current, badgeSize: 160 })); }}
+                              className="text-neutral-600 hover:text-neutral-300 transition-colors ml-1" title={t.resetTip}>
+                              <RotateCcw size={10} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <input type="range" min="60" max="220" step="5" value={badgeSize}
+                        onChange={e => setBadgeSizeWithHistory(parseInt(e.target.value))}
+                        className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                    </div>
+                  )}
+                  {(labelStyle === 'dymo' || labelStyle === 'badge') && (
+                    <div className="flex items-center justify-between">
+                      <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                        <Move size={11} className="shrink-0" /> {t.dragHint}
+                      </p>
+                      {((labelStyle === 'dymo' && (tapeOffset.x !== 0 || tapeOffset.y !== 0)) ||
+                        (labelStyle === 'badge' && (badgeOffset.x !== 0 || badgeOffset.y !== 0))) && (
+                        <button
+                          onClick={() => {
+                            if (labelStyle === 'dymo') { setTapeOffset({ x: 0, y: 0 }); pushHistory(makeSnapshot({ ...stateRef.current, tapeOffset: { x: 0, y: 0 } })); }
+                            else { setBadgeOffset({ x: 0, y: 0 }); pushHistory(makeSnapshot({ ...stateRef.current, badgeOffset: { x: 0, y: 0 } })); }
+                          }}
+                          className="flex items-center gap-1 text-[10px] text-neutral-600 hover:text-neutral-300 transition-colors ml-2 shrink-0">
+                          <RotateCcw size={10} /> {t.resetBtn}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-2 pt-2">
+                    <label className="text-xs text-neutral-500 flex items-center gap-1">
+                      <Palette size={14} /> {labelStyle === 'banner' ? t.colorBanner : labelStyle === 'badge' ? t.colorBadge : t.colorTape}
+                    </label>
+                    <div className="flex gap-3 items-center">
+                      {TAPE_COLORS.map(color => (
+                        <button key={color.id} onClick={() => setTapeColorWithHistory(color.hex)}
+                          className={`relative w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${
+                            tapeColor === color.hex ? 'border-blue-500 scale-110' : 'border-transparent hover:scale-105'
+                          }`} style={{ backgroundColor: color.hex }} title={color.name}>
+                          {tapeColor === color.hex && <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />}
+                        </button>
+                      ))}
+                      <button onClick={() => tapeColorInputRef.current?.click()} title={t.customColor}
+                        className={`relative w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all hover:scale-105 ${
+                          !isPresetColor ? 'border-blue-500 scale-110' : 'border-dashed border-neutral-600 hover:border-neutral-400'
+                        }`} style={!isPresetColor ? { backgroundColor: tapeColor } : {}}>
+                        {isPresetColor ? <Palette size={12} className="text-neutral-400" /> : <Check size={14} style={{ color: '#fff', mixBlendMode: 'difference' }} />}
+                      </button>
+                      <input ref={tapeColorInputRef} type="color" value={tapeColor}
+                        onChange={e => setTapeColorWithHistory(e.target.value)}
+                        className="sr-only" />
+                    </div>
+                  </div>
+                  <div className="space-y-2 pt-4 border-t border-white/5">
+                    <div className="flex justify-between items-center text-xs text-neutral-400 mb-2">
+                      <span className="flex items-center gap-1"><Droplet size={14} /> {t.opacity}</span>
+                      <span>{Math.round(tapeOpacity * 100)}%</span>
+                    </div>
+                    <input type="range" min="0.1" max="1" step="0.05" value={tapeOpacity}
+                      onChange={e => setTapeOpacityWithHistory(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                  </div>
+                </>
+              )}
+            </section>
+
+            <hr className="border-white/5" />
+
+            <section className="space-y-4 pb-2">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setPresetsOpen(o => !o)}
+                  className="flex-1 flex items-center justify-between text-sm font-semibold tracking-wide text-neutral-300 uppercase">
+                  <span className="flex items-center gap-2"><Bookmark size={16} /> {t.section3}</span>
+                  <ChevronDown size={15} className={`transition-transform text-neutral-500 ${presetsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                <button onClick={() => setSection3HintVisible(v => !v)}
+                  className="text-neutral-600 hover:text-neutral-400 transition-colors shrink-0" title={t.section3Hint}>
+                  <Info size={14} />
+                </button>
+              </div>
+              {section3HintVisible && (
+                <p className="text-[11px] text-neutral-500 bg-neutral-800/40 border border-neutral-700/40 rounded-lg px-3 py-2 leading-relaxed">
+                  {t.section3Hint}
+                </p>
+              )}
+              {presetsOpen && (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input type="text" value={presetName} onChange={e => setPresetName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
+                      placeholder={t.presetNamePlaceholder} maxLength={30}
+                      className="flex-1 bg-[#09090b] border border-neutral-700/50 rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all placeholder:text-neutral-600" />
+                    <button onClick={handleSavePreset}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-blue-500/60 hover:text-blue-300 transition-all text-xs font-medium shrink-0">
+                      <BookmarkPlus size={14} /> {t.savePreset}
+                    </button>
+                  </div>
+                  {presets.length === 0 ? (
+                    <p className="text-xs text-neutral-600 text-center py-3">{t.noPresets}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {presets.map(preset => (
+                        <div key={preset.id}
+                          className="flex items-center gap-2.5 bg-[#09090b] border border-neutral-800/60 rounded-xl px-3 py-2 group hover:border-neutral-700/60 transition-colors">
+                          {preset.thumbnail ? (
+                            <img src={preset.thumbnail} alt={preset.name}
+                              className="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/10" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg shrink-0 border border-white/10 flex items-center justify-center"
+                              style={{ backgroundColor: preset.tapeColor }}>
+                              <Bookmark size={14} className="text-white/60" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <span className="block text-xs text-neutral-200 font-mono truncate">{preset.name}</span>
+                            <span className="text-[10px] text-neutral-600">{preset.labelStyle}</span>
+                          </div>
+                          <button onClick={() => handleApplyPreset(preset)}
+                            className="text-[11px] text-blue-400 hover:text-blue-300 font-medium transition-colors shrink-0 px-1">
+                            {t.applyPreset}
+                          </button>
+                          <button onClick={() => handleDeletePreset(preset.id)}
+                            className="text-neutral-700 hover:text-red-400 transition-colors shrink-0">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+
+        <div className="sidebar-footer shrink-0 p-6 lg:p-8 pt-5 bg-[#121214]">
+          <div className="flex gap-2 mb-4">
+            <button onClick={undo} disabled={!canUndo} title={`${t.undo} (Cmd+Z)`}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-medium transition-all ${
+                canUndo ? 'border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-neutral-500 hover:text-white' : 'border-neutral-800/30 bg-[#09090b]/40 text-neutral-600 cursor-not-allowed'
+              }`}><Undo2 size={13} /> {t.undo}</button>
+            <button onClick={redo} disabled={!canRedo} title={`${t.redo} (Cmd+Shift+Z)`}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-medium transition-all ${
+                canRedo ? 'border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-neutral-500 hover:text-white' : 'border-neutral-800/30 bg-[#09090b]/40 text-neutral-600 cursor-not-allowed'
+              }`}><Redo2 size={13} /> {t.redo}</button>
+          </div>
+          <div ref={downloadMenuRef} className="relative w-full mb-6">
+            <div className="flex w-full">
+              <button onClick={handleDownloadPng} disabled={isExporting}
+                className="liquid-glass-btn flex-1 font-medium py-3.5 px-4 rounded-l-xl flex items-center justify-center gap-2">
+                {isExporting ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <Download size={18} />}
+                {t.download} PNG
+              </button>
+              <button onClick={() => setDownloadMenuOpen(o => !o)} disabled={isExporting}
+                className="liquid-glass-btn font-medium py-3.5 px-3 rounded-r-xl border-l border-white/10 flex items-center justify-center"
+                aria-label="Altre opzioni di download">
+                <ChevronDown size={16} className={`transition-transform ${downloadMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+            {downloadMenuOpen && (
+              <div className="absolute bottom-full mb-2 left-0 right-0 bg-[#1c1c1e] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50">
+                <button onClick={handleDownloadPng} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left">
+                  <Download size={15} className="text-neutral-400 shrink-0" />
+                  <div><div className="font-medium">{t.downloadPng}</div><div className="text-[11px] text-neutral-500">Universale, massima qualità</div></div>
+                </button>
+                <div className="h-px bg-white/5" />
+                <button onClick={handleDownloadIcns} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left">
+                  <Download size={15} className="text-neutral-400 shrink-0" />
+                  <div><div className="font-medium">{t.downloadIcns}</div><div className="text-[11px] text-neutral-500">11 risoluzioni + Retina @2x</div></div>
+                </button>
+                <div className="h-px bg-white/5" />
+                <button onClick={handleDownloadIco} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left">
+                  <Download size={15} className="text-neutral-400 shrink-0" />
+                  <div><div className="font-medium">{t.downloadIco}</div><div className="text-[11px] text-neutral-500">6 risoluzioni (16→256px)</div></div>
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col items-center gap-3 pt-6 border-t border-white/5">
+            <span className="text-[10px] text-neutral-500 font-mono tracking-widest lowercase">made with love by antonello :)</span>
+            <div className="flex items-center gap-5 text-neutral-400">
+              <a href="https://x.com/antonello23" target="_blank" rel="noreferrer" className="hover:text-white transition-colors"><IconX size={16} /></a>
+              <a href="https://www.instagram.com/antonelloan23/" target="_blank" rel="noreferrer" className="hover:text-white transition-colors"><IconInstagram size={16} /></a>
+              <a href="https://buymeacoffee.com/antonello23" target="_blank" rel="noreferrer" className="hover:text-white transition-colors"><Coffee size={16} /></a>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main className="flex-1 relative flex flex-col items-center justify-center min-h-0 overflow-hidden bg-dot-pattern p-4 md:p-8">
+        <style dangerouslySetInnerHTML={{__html: `
+          .bg-dot-pattern { background-color: #09090b; background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px); background-size: 24px 24px; }
+          .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+          .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+          .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.1); border-radius: 10px; }
+          .sidebar-footer {
+            position: relative;
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            background: rgba(18, 18, 20, 0.82);
+            border-top: 1px solid rgba(255,255,255,0.06);
+          }
+          .sidebar-footer::before {
+            content: ''; position: absolute; top: -48px; left: 0; right: 0; height: 48px;
+            pointer-events: none;
+            background: linear-gradient(to bottom, transparent, rgba(18,18,20,0.82));
+          }
+          .liquid-glass-btn {
+            position: relative; overflow: hidden; color: rgba(255,255,255,0.92); font-weight: 500;
+            background: linear-gradient(145deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.10) 100%);
+            border: 1px solid rgba(255,255,255,0.18);
+            box-shadow: 0 2px 0 rgba(255,255,255,0.12) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 8px 32px rgba(0,0,0,0.35), 0 1px 8px rgba(255,255,255,0.04);
+            backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+            transition: all 0.2s ease; text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+          }
+          .liquid-glass-btn::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, transparent 100%); border-radius: inherit; pointer-events: none; }
+          .liquid-glass-btn::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.08) 0%, transparent 60%); pointer-events: none; }
+          .liquid-glass-btn:hover { background: linear-gradient(145deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.15) 100%); border-color: rgba(255,255,255,0.28); box-shadow: 0 2px 0 rgba(255,255,255,0.16) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 12px 40px rgba(0,0,0,0.4), 0 1px 12px rgba(255,255,255,0.06); }
+          .liquid-glass-btn:active { transform: scale(0.98); box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset, 0 -1px 0 rgba(0,0,0,0.25) inset, 0 4px 16px rgba(0,0,0,0.3); }
+          .liquid-glass-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+          @keyframes bounce-x { 0%,100% { transform: translateX(0); } 50% { transform: translateX(-6px); } }
+          .animate-bounce-x { animation: bounce-x 1.8s ease-in-out infinite; }
+        `}} />
+        {!coverSrc && (
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-neutral-600 text-xs pointer-events-none select-none">
+            <span className="animate-bounce-x">←</span><span>{t.uploadHint}</span>
+          </div>
+        )}
+        <div className="relative group w-full h-full flex items-center justify-center max-w-4xl" style={{ touchAction: 'none' }}>
+          {(coverSrc || label.trim() !== '') && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 bg-neutral-800/80 backdrop-blur text-neutral-300 text-xs px-3 py-1.5 rounded-full pointer-events-none border border-white/10 z-20">
+              <Move size={12} /> {t.dragCanvasHint}
+            </div>
+          )}
+          <canvas ref={canvasRef} width={1024} height={1024}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            className="max-w-full max-h-full aspect-square object-contain drop-shadow-2xl"
+          />
+        </div>
+      </main>
+      <Analytics />
+    </div>
+  );
+}
