@@ -344,20 +344,25 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, t
   ctx.restore();
 };
 
-const bannerH = rectH * 0.30, bannerY = rectY + rectH - bannerH;
-const r = bannerH * 0.25;
+const bannerH = rectH * 0.30;
+const bannerY = rectY + rectH - bannerH;
+
 ctx.save();
-ctx.globalAlpha = opacity; ctx.fillStyle = tapeHex;
+
+// Applica la maschera di ritaglio della cartella
+if (FOLDERS.classic.buildFlapPath) {
+  FOLDERS.classic.buildFlapPath(ctx, { x: rectX, y: rectY, w: rectW, h: rectH });
+  ctx.clip();
+}
+
+ctx.globalAlpha = opacity; 
+ctx.fillStyle = tapeHex;
+
+// Disegna un rettangolo semplice. Il clip() eliminerà il colore fuori dai bordi curvi.
 ctx.beginPath();
-ctx.moveTo(rectX, bannerY);
-ctx.lineTo(rectX + rectW, bannerY);
-ctx.lineTo(rectX + rectW, bannerY + bannerH - r);
-ctx.arcTo(rectX + rectW, bannerY + bannerH, rectX + rectW - r, bannerY + bannerH, r);
-ctx.lineTo(rectX + r, bannerY + bannerH);
-ctx.arcTo(rectX, bannerY + bannerH, rectX, bannerY + bannerH - r, r);
-ctx.lineTo(rectX, bannerY);
-ctx.closePath();
+ctx.rect(rectX, bannerY, rectW, bannerH);
 ctx.fill();
+
 ctx.globalAlpha = 1;
   ctx.fillStyle = getTapeTextColor(tapeHex);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
