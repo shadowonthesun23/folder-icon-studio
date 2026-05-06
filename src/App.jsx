@@ -345,9 +345,19 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, t
 };
 
 const bannerH = rectH * 0.30, bannerY = rectY + rectH - bannerH;
+const r = 1.058 * Math.min(scaleX, scaleY);
 ctx.save();
 ctx.globalAlpha = opacity; ctx.fillStyle = tapeHex;
-ctx.fillRect(rectX, bannerY, rectW, bannerH);
+ctx.beginPath();
+ctx.moveTo(rectX, bannerY);
+ctx.lineTo(rectX + rectW, bannerY);
+ctx.lineTo(rectX + rectW, bannerY + bannerH - r);
+ctx.arcTo(rectX + rectW, bannerY + bannerH, rectX + rectW - r, bannerY + bannerH, r);
+ctx.lineTo(rectX + r, bannerY + bannerH);
+ctx.arcTo(rectX, bannerY + bannerH, rectX, bannerY + bannerH - r, r);
+ctx.lineTo(rectX, bannerY);
+ctx.closePath();
+ctx.fill();
 ctx.globalAlpha = 1;
   ctx.fillStyle = getTapeTextColor(tapeHex);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
