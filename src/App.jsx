@@ -345,7 +345,7 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, t
 };
 
 const bannerH = rectH * 0.30, bannerY = rectY + rectH - bannerH;
-const r = 1.058 * Math.min(scaleX, scaleY);
+const r = bannerH * 0.25;
 ctx.save();
 ctx.globalAlpha = opacity; ctx.fillStyle = tapeHex;
 ctx.beginPath();
