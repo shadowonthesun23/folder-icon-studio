@@ -473,4 +473,4 @@ export default function App() {
   const [fontFamily, setFontFamily] = useState('Space Mono');
   const [dominantColor, setDominantColor] = useState(null);
   const [folderColorOverride, setFolderColorOverride] = useState(null);
-  const [customFolderColor, setCustomFolderColor] = useState('
+ const [customFolderColor, setCustomFolderColor] = useState('#4B8EF0');
