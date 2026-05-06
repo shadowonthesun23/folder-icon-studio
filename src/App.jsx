@@ -344,16 +344,11 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, t
   ctx.restore();
 };
 
-const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontSizeMultiplier, fontFamily) => {
-  const { clipRect } = shape;
-  const scaleX = folderRect.w / clipRect.vw, scaleY = folderRect.h / clipRect.vh;
-  const rectX = folderRect.x + clipRect.x * scaleX, rectY = folderRect.y + clipRect.y * scaleY;
-  const rectW = clipRect.w * scaleX, rectH = clipRect.h * scaleY;
-  const bannerH = rectH * 0.30, bannerY = rectY + rectH - bannerH;
-  ctx.save();
-  ctx.globalAlpha = opacity; ctx.fillStyle = tapeHex;
-  ctx.fillRect(rectX, bannerY, rectW, bannerH);
-  ctx.globalAlpha = 1;
+const bannerH = rectH * 0.30, bannerY = rectY + rectH - bannerH;
+ctx.save();
+ctx.globalAlpha = opacity; ctx.fillStyle = tapeHex;
+ctx.fillRect(rectX, bannerY, rectW, bannerH);
+ctx.globalAlpha = 1;
   ctx.fillStyle = getTapeTextColor(tapeHex);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const words = text.split(' ');
