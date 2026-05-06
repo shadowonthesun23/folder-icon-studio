@@ -343,7 +343,7 @@ const drawTape = (ctx, w, h, text, tapeHex, opacity, tapeOffsetX, tapeOffsetY, t
   ctx.fillText(text, x + tapeW / 2, y + tapeH / 2);
   ctx.restore();
 };
-
+const drawBanner = (ctx, rectX, rectY, rectW, rectH, text, tapeHex, opacity, fontSizeMultiplier, fontFamily) => {
 const bannerH = rectH * 0.30;
 const bannerY = rectY + rectH - bannerH;
 
