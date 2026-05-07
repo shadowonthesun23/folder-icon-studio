@@ -9,7 +9,7 @@ export default function SidebarFooter({
   onDownloadPng, onDownloadIcns, onDownloadIco,
 }) {
   return (
-    <div className="sidebar-footer shrink-0 p-6 lg:p-8 pt-5 bg-[#121214]">
+    <div className="sidebar-footer shrink-0 p-3 lg:p-8 pt-3 lg:pt-5 bg-[#121214]">
       {/* Undo / Redo */}
       <div className="flex gap-2 mb-4">
         <button onClick={onUndo} disabled={!canUndo} title={`${t.undo} (Cmd+Z)`}
