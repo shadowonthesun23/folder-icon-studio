@@ -46,6 +46,8 @@ export const drawBanner = (ctx, shape, folderRect, text, tapeHex, opacity, fontS
   const rectW = clipRect.w * scaleX, rectH = clipRect.h * scaleY;
   const bannerH = rectH * 0.30, bannerY = rectY + rectH - bannerH;
   ctx.save();
+  shape.buildFlapPath(ctx, folderRect);
+  ctx.clip();
   ctx.globalAlpha = opacity; ctx.fillStyle = tapeHex;
   ctx.fillRect(rectX, bannerY, rectW, bannerH);
   ctx.globalAlpha = 1;
