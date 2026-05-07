@@ -308,7 +308,7 @@ export default function App() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col lg:flex-row h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-hidden">
+    <div className="flex flex-col lg:flex-row min-h-[100dvh] lg:h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-y-auto lg:overflow-hidden">
       <span style={{ fontFamily: 'Space Mono', position: 'absolute', opacity: 0, pointerEvents: 'none' }}>.</span>
       <style dangerouslySetInnerHTML={{__html: `
         .bg-dot-pattern { background-color: #09090b; background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px); background-size: 24px 24px; }
