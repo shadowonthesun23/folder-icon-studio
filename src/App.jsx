@@ -327,7 +327,7 @@ export default function App() {
         .animate-bounce-x { animation: bounce-x 1.8s ease-in-out infinite; }
       `}} />
 
-      <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-auto max-h-[45dvh] lg:max-h-none lg:h-full overflow-y-auto lg:overflow-hidden">
+      <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[55dvh] lg:h-full overflow-hidden">
         <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
           <SidebarHeader lang={lang} switchLang={switchLang} t={t} />
           <div className="p-6 lg:p-8 flex flex-col gap-6 lg:gap-8">
