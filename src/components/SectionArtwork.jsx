@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Upload, ZoomIn, RotateCw, Palette, Check, X } from 'lucide-react';
 import { FOLDERS } from '../constants/folders';
 import { getTapeTextColor } from '../lib/canvas';
@@ -12,6 +13,30 @@ export default function SectionArtwork({
   activeColorPalette, isCustomFolderColor,
   folderColorInputRef,
 }) {
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    const file = e.dataTransfer.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const syntheticEvent = { target: { files: [file], value: '' } };
+    onFileUpload(syntheticEvent);
+  };
+
   return (
     <section className="space-y-4">
       <h2 className="text-sm font-semibold tracking-wide text-neutral-300 uppercase flex items-center gap-2">
@@ -35,23 +60,37 @@ export default function SectionArtwork({
       </div>
 
       {/* Upload area */}
-      <div className="relative">
+      <div className="relative"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <label
-          className="flex flex-col items-center justify-center w-full h-36 px-4 transition-all border border-dashed rounded-xl cursor-pointer group overflow-hidden relative"
-          style={coverSrc
+          className={`flex flex-col items-center justify-center w-full h-36 px-4 transition-all border border-dashed rounded-xl cursor-pointer group overflow-hidden relative ${
+            isDraggingOver ? 'border-blue-400 scale-[1.01]' : ''
+          }`}
+          style={coverSrc && !isDraggingOver
             ? { backgroundImage: `url(${coverSrc})`, backgroundSize: 'cover', backgroundPosition: 'center', borderColor: 'rgba(255,255,255,0.15)' }
-            : { backgroundColor: '#09090b', borderColor: 'rgba(255,255,255,0.15)' }}
+            : isDraggingOver
+              ? { backgroundColor: 'rgba(59,130,246,0.08)', borderColor: 'rgba(96,165,250,0.6)' }
+              : { backgroundColor: '#09090b', borderColor: 'rgba(255,255,255,0.15)' }}
         >
-          {coverSrc && <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors" />}
-          {!coverSrc && <div className="absolute inset-0 group-hover:bg-blue-500/5 transition-colors rounded-xl" />}
+          {coverSrc && !isDraggingOver && <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors" />}
+          {!coverSrc && !isDraggingOver && <div className="absolute inset-0 group-hover:bg-blue-500/5 transition-colors rounded-xl" />}
           <div className="relative z-10 flex flex-col items-center space-y-2 text-center">
-            <div className={`p-3 rounded-full transition-colors ${coverSrc ? 'bg-white/10 group-hover:bg-white/20' : 'bg-neutral-800 group-hover:bg-blue-500/20'}`}>
-              <Upload size={20} className={coverSrc ? 'text-white' : 'text-neutral-400 group-hover:text-blue-400'} />
+            <div className={`p-3 rounded-full transition-colors ${
+              isDraggingOver
+                ? 'bg-blue-500/20'
+                : coverSrc ? 'bg-white/10 group-hover:bg-white/20' : 'bg-neutral-800 group-hover:bg-blue-500/20'
+            }`}>
+              <Upload size={20} className={isDraggingOver ? 'text-blue-400' : coverSrc ? 'text-white' : 'text-neutral-400 group-hover:text-blue-400'} />
             </div>
-            <span className={`font-medium text-sm ${coverSrc ? 'text-white' : 'text-neutral-300'}`}>
-              {coverSrc ? t.changeImage : t.uploadImage}
+            <span className={`font-medium text-sm ${isDraggingOver ? 'text-blue-300' : coverSrc ? 'text-white' : 'text-neutral-300'}`}>
+              {isDraggingOver ? 'Rilascia qui' : coverSrc ? t.changeImage : t.uploadImage}
             </span>
-            <span className={`text-xs ${coverSrc ? 'text-white/60' : 'text-neutral-500'}`}>{t.uploadFormats}</span>
+            <span className={`text-xs ${isDraggingOver ? 'text-blue-400/70' : coverSrc ? 'text-white/60' : 'text-neutral-500'}`}>
+              {isDraggingOver ? '— oppure clicca per sfogliare —' : t.uploadFormats}
+            </span>
           </div>
           <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={onFileUpload} />
         </label>
