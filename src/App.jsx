@@ -308,7 +308,7 @@ export default function App() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col lg:flex-row min-h-[100dvh] lg:h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-y-auto lg:overflow-hidden">
+    <div className="flex flex-col lg:flex-row h-[100dvh] bg-[#09090b] text-neutral-100 font-sans overflow-hidden">
       <span style={{ fontFamily: 'Space Mono', position: 'absolute', opacity: 0, pointerEvents: 'none' }}>.</span>
       <style dangerouslySetInnerHTML={{__html: `
         .bg-dot-pattern { background-color: #09090b; background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px); background-size: 24px 24px; }
@@ -330,7 +330,7 @@ export default function App() {
       <aside className="w-full lg:w-[400px] bg-[#121214] border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col z-10 shrink-0 h-[55dvh] lg:h-full overflow-hidden">
         <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
           <SidebarHeader lang={lang} switchLang={switchLang} t={t} />
-          <div className="p-6 lg:p-8 flex flex-col gap-6 lg:gap-8">
+          <div className="p-4 lg:p-5 flex flex-col gap-3">
             <SectionArtwork
               t={t} folderShape={folderShape} setFolderShape={setFolderShape}
               coverSrc={coverSrc} onFileUpload={handleFileUpload} onClearImage={handleClearImage} fileInputRef={fileInputRef}
@@ -341,7 +341,6 @@ export default function App() {
               activeColorPalette={activeColorPalette} isCustomFolderColor={isCustomFolderColor}
               folderColorInputRef={folderColorInputRef}
             />
-            <hr className="border-white/5" />
             <SectionLabel
               t={t} folderShape={folderShape}
               label={label} setLabelWithHistory={setLabelWithHistory}
@@ -358,7 +357,6 @@ export default function App() {
               tapeColorInputRef={tapeColorInputRef} isPresetColor={isPresetColor}
               pushHistory={pushHistory} stateRef={stateRef}
             />
-            <hr className="border-white/5" />
             <SectionPresets
               t={t} presets={presets} presetName={presetName} setPresetName={setPresetName}
               presetsOpen={presetsOpen} setPresetsOpen={setPresetsOpen}

@@ -8,35 +8,45 @@ export default function SectionPresets({
   onSave, onApply, onDelete,
 }) {
   return (
-    <section className="space-y-4 pb-2">
-      <div className="flex items-center gap-2">
+    <section className="rounded-xl border border-white/[0.07] bg-[#09090b] overflow-hidden">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/5">
+        <div className="w-6 h-6 rounded-md bg-amber-500/15 flex items-center justify-center text-amber-400" aria-hidden="true">
+          <Bookmark size={13} />
+        </div>
         <button onClick={() => setPresetsOpen(o => !o)}
-          className="flex-1 flex items-center justify-between text-sm font-semibold tracking-wide text-neutral-300 uppercase">
-          <span className="flex items-center gap-2"><Bookmark size={16} /> {t.section3}</span>
-          <ChevronDown size={15} className={`transition-transform text-neutral-500 ${presetsOpen ? 'rotate-180' : ''}`} />
+          className="flex-1 flex items-center justify-between">
+          <h2 className="text-xs font-semibold tracking-wide text-neutral-300 uppercase">{t.section3}</h2>
+          <div className="flex items-center gap-2">
+            {presets.length > 0 && (
+              <span className="text-[10px] bg-white/6 text-neutral-500 px-2 py-0.5 rounded-full">
+                {presets.length}
+              </span>
+            )}
+            <ChevronDown size={13} className={`transition-transform text-neutral-500 ${presetsOpen ? 'rotate-180' : ''}`} />
+          </div>
         </button>
         <button onClick={() => setSection3HintVisible(v => !v)}
-          className="text-neutral-600 hover:text-neutral-400 transition-colors shrink-0" title={t.section3Hint}>
-          <Info size={14} />
+          className="text-neutral-600 hover:text-neutral-400 transition-colors shrink-0 ml-1" title={t.section3Hint}>
+          <Info size={13} />
         </button>
       </div>
 
       {section3HintVisible && (
-        <p className="text-[11px] text-neutral-500 bg-neutral-800/40 border border-neutral-700/40 rounded-lg px-3 py-2 leading-relaxed">
-          {t.section3Hint}
-        </p>
+        <div className="px-4 py-3 border-b border-white/5 bg-neutral-800/20">
+          <p className="text-[11px] text-neutral-500 leading-relaxed">{t.section3Hint}</p>
+        </div>
       )}
 
       {presetsOpen && (
-        <div className="space-y-3">
+        <div className="p-4 space-y-3">
           <div className="flex gap-2">
             <input type="text" value={presetName} onChange={e => setPresetName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && onSave()}
               placeholder={t.presetNamePlaceholder} maxLength={30}
-              className="flex-1 bg-[#09090b] border border-neutral-700/50 rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all placeholder:text-neutral-600" />
+              className="flex-1 bg-[#121214] border border-neutral-700/50 rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono transition-all placeholder:text-neutral-600" />
             <button onClick={onSave}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-neutral-700/50 bg-[#09090b] text-neutral-300 hover:border-blue-500/60 hover:text-blue-300 transition-all text-xs font-medium shrink-0">
-              <BookmarkPlus size={14} /> {t.savePreset}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-neutral-700/50 bg-[#121214] text-neutral-300 hover:border-blue-500/60 hover:text-blue-300 transition-all text-xs font-medium shrink-0">
+              <BookmarkPlus size={13} /> {t.savePreset}
             </button>
           </div>
 
@@ -46,7 +56,7 @@ export default function SectionPresets({
             <div className="space-y-2">
               {presets.map(preset => (
                 <div key={preset.id}
-                  className="flex items-center gap-2.5 bg-[#09090b] border border-neutral-800/60 rounded-xl px-3 py-2 group hover:border-neutral-700/60 transition-colors">
+                  className="flex items-center gap-2.5 bg-[#121214] border border-neutral-800/60 rounded-xl px-3 py-2 group hover:border-neutral-700/60 transition-colors">
                   {preset.thumbnail ? (
                     <img src={preset.thumbnail} alt={preset.name}
                       className="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/10" />
