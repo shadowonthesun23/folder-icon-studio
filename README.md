@@ -10,13 +10,7 @@ Create beautiful custom folder icons directly in your browser.
 
 ## Preview
 
-> A screenshot or short GIF would make this README much stronger.
->
-> Suggested path: `docs/preview.png`
-
-```md
-![Folder Icon Studio preview](docs/preview.png)
-```
+![Folder Icon Studio preview](docs/preview.svg)
 
 ## Features
 
