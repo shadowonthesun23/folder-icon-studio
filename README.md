@@ -10,7 +10,7 @@ Create beautiful custom folder icons directly in your browser.
 
 ## Preview
 
-![Folder Icon Studio screenshot](docs/screenshot.svg)
+![Folder Icon Studio screenshot](docs/screenshot.jpg)
 
 ## Features
 
