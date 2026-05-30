@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, ZoomIn, RotateCw, Palette, Check, X } from 'lucide-react';
+import { Upload, ZoomIn, RotateCw, Palette, Check, X, Image as ImageIcon } from 'lucide-react';
 import { FOLDERS } from '../constants/folders';
 import { getTapeTextColor } from '../lib/canvas';
 
@@ -27,7 +27,9 @@ export default function SectionArtwork({
   return (
     <section className="rounded-xl border border-white/[0.07] bg-[#09090b] overflow-hidden">
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/5">
-        <div className="w-6 h-6 rounded-md bg-blue-500/15 flex items-center justify-center text-blue-400 text-xs" aria-hidden="true">🖼</div>
+        <div className="w-6 h-6 rounded-md bg-blue-500/15 flex items-center justify-center text-blue-400" aria-hidden="true">
+          <ImageIcon size={13} />
+        </div>
         <h2 className="text-xs font-semibold tracking-wide text-neutral-300 uppercase">{t.section1}</h2>
       </div>
       <div className="p-4 space-y-4">
@@ -42,7 +44,7 @@ export default function SectionArtwork({
                   folderShape === f.id
                     ? 'border-blue-500 bg-blue-500/10 text-blue-300'
                     : 'border-neutral-700/50 bg-[#121214] text-neutral-400 hover:border-neutral-500'
-                }`}>{f.name}</button>
+                }`}>{t.folderNames[f.id] ?? f.name}</button>
             ))}
           </div>
         </div>
@@ -68,10 +70,10 @@ export default function SectionArtwork({
                 <Upload size={20} className={isDraggingOver ? 'text-blue-400' : coverSrc ? 'text-white' : 'text-neutral-400 group-hover:text-blue-400'} />
               </div>
               <span className={`font-medium text-sm ${isDraggingOver ? 'text-blue-300' : coverSrc ? 'text-white' : 'text-neutral-300'}`}>
-                {isDraggingOver ? 'Rilascia qui' : coverSrc ? t.changeImage : t.uploadImage}
+                {isDraggingOver ? t.dropImage : coverSrc ? t.changeImage : t.uploadImage}
               </span>
               <span className={`text-xs ${isDraggingOver ? 'text-blue-400/70' : coverSrc ? 'text-white/60' : 'text-neutral-500'}`}>
-                {isDraggingOver ? '— oppure clicca per sfogliare —' : t.uploadFormats}
+                {isDraggingOver ? t.dropImageBrowse : t.uploadFormats}
               </span>
             </div>
             <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={onFileUpload} />
@@ -125,7 +127,7 @@ export default function SectionArtwork({
                 {folderColorOverride === null && <Check size={11} className="text-white" />}
               </button>
               {activeColorPalette.slice(1).map(color => (
-                <button key={color.id} onClick={() => setFolderColorOverrideWithHistory(color.hex)} title={color.name}
+                <button key={color.id} onClick={() => setFolderColorOverrideWithHistory(color.hex)} title={t.colorNames[color.id] ?? color.name}
                   className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
                     folderColorOverride === color.hex && !isCustomFolderColor ? 'border-white scale-110' : 'border-transparent hover:scale-105'
                   }`} style={{ backgroundColor: color.hex }}>

@@ -178,7 +178,7 @@ export default function SectionLabel({
                   <button key={color.id} onClick={() => setTapeColorWithHistory(color.hex)}
                     className={`relative w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${
                       tapeColor === color.hex ? 'border-blue-500 scale-110' : 'border-transparent hover:scale-105'
-                    }`} style={{ backgroundColor: color.hex }} title={color.name}>
+                    }`} style={{ backgroundColor: color.hex }} title={t.colorNames[color.id] ?? color.name}>
                     {tapeColor === color.hex && (
                       <Check size={14} className={color.id === 'white' || color.id === 'vintage' ? 'text-black' : 'text-white'} />
                     )}

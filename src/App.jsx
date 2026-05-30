@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Analytics } from '@vercel/analytics/react';
 
 import { TRANSLATIONS } from './constants/translations';
 import { FOLDER_COLORS, CASSETTE_COLORS, TAPE_COLORS } from './constants/colors';
@@ -17,6 +16,7 @@ import SectionLabel from './components/SectionLabel';
 import SectionPresets from './components/SectionPresets';
 import SidebarFooter from './components/SidebarFooter';
 import CanvasPreview from './components/CanvasPreview';
+import SectionInstructions from './components/SectionInstructions';
 
 export default function App() {
   const canvasRef = useRef(null);
@@ -61,11 +61,13 @@ export default function App() {
   const [presetName, setPresetName] = useState('');
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [section3HintVisible, setSection3HintVisible] = useState(false);
+  const [fontRenderKey, setFontRenderKey] = useState(0);
   const [lang, setLang] = useState(() => { try { return localStorage.getItem('fis_lang') || 'it'; } catch { return 'it'; } });
 
   const t = TRANSLATIONS[lang];
   const activeColorPalette = folderShape === 'cassette' ? CASSETTE_COLORS : FOLDER_COLORS;
   const effectiveTintColor = folderShape === 'cassette' ? folderColorOverride : (folderColorOverride ?? dominantColor ?? null);
+  const effectiveLabelStyle = folderShape === 'cassette' && (labelStyle === 'banner' || labelStyle === 'badge') ? 'dymo' : labelStyle;
   const isPresetColor = TAPE_COLORS.some(c => c.hex === tapeColor);
   const isCustomFolderColor = folderColorOverride !== null && !activeColorPalette.slice(1).some(c => c.hex === folderColorOverride);
 
@@ -106,48 +108,77 @@ export default function App() {
 
   // ── Drag ─────────────────────────────────────────────────────────────────────
   const { handlePointerDown, handlePointerMove, handlePointerUp, updateCursor } = useDrag({
-    canvasRef, coverSrc, label, labelStyle, tapeScale, tapeOffset, badgeOffset, badgeSize,
+    canvasRef, coverSrc, label, labelStyle: effectiveLabelStyle, tapeScale, tapeOffset, badgeOffset, badgeSize,
     setTapeOffset, setBadgeOffset, setCoverOffset,
     onDragEnd: () => pushHistory(makeSnapshot(stateRef.current)),
   });
   useEffect(() => { updateCursor(false); }, [coverSrc, updateCursor]);
 
-  // ── Cassette shape reset ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (folderShape === 'cassette') {
-      setLabel('');
-      setLabelStyle(prev => (prev === 'banner' || prev === 'badge') ? 'dymo' : prev);
-      setFolderColorOverride(null);
-    }
-  }, [folderShape]);
-
   // ── Asset loading ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&family=Playfair+Display:wght@700&display=swap';
-    link.rel = 'stylesheet'; document.head.appendChild(link);
+    const fontHref = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&family=Playfair+Display:wght@700&display=swap';
+    const link = document.querySelector('link[data-fis-fonts="true"]') ?? document.createElement('link');
+    if (!link.parentNode) {
+      link.href = fontHref;
+      link.rel = 'stylesheet';
+      link.dataset.fisFonts = 'true';
+      document.head.appendChild(link);
+    }
+
+    let cancelled = false;
+    const refreshCanvasFonts = async () => {
+      if (document.fonts) {
+        await Promise.allSettled([
+          document.fonts.load('700 64px "Space Mono"'),
+          document.fonts.load('700 64px "Inter"'),
+          document.fonts.load('700 64px "Permanent Marker"'),
+          document.fonts.load('700 64px "Playfair Display"'),
+        ]);
+        await document.fonts.ready;
+      }
+      if (!cancelled) setFontRenderKey(key => key + 1);
+    };
+
+    link.addEventListener('load', refreshCanvasFonts);
+    refreshCanvasFonts();
+
+    return () => {
+      cancelled = true;
+      link.removeEventListener('load', refreshCanvasFonts);
+    };
   }, []);
 
   useEffect(() => {
-    setBaseImgData(null);
     if (folderShape === 'cassette') return;
-    loadSvgAsImage(FOLDERS[folderShape].svg).then(setBaseImgData).catch(console.error);
+    let cancelled = false;
+    loadSvgAsImage(FOLDERS[folderShape].svg)
+      .then(img => { if (!cancelled) setBaseImgData(img); })
+      .catch(console.error);
+    return () => { cancelled = true; };
   }, [folderShape]);
 
   useEffect(() => {
     if (folderShape !== 'cassette') return;
-    setCassetteBaseImg(null); setCassetteOverlayImg(null); setCassetteMaskImg(null);
+    let cancelled = false;
     Promise.all([
       loadPngAsImage('/cassette-base.png'),
       loadPngAsImage('/cassette-overlay.png'),
       new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = '/maschera.svg'; }),
-    ]).then(([base, overlay, mask]) => { setCassetteBaseImg(base); setCassetteOverlayImg(overlay); setCassetteMaskImg(mask); })
+    ]).then(([base, overlay, mask]) => {
+      if (cancelled) return;
+      setCassetteBaseImg(base); setCassetteOverlayImg(overlay); setCassetteMaskImg(mask);
+    })
       .catch(console.error);
+    return () => { cancelled = true; };
   }, [folderShape]);
 
   useEffect(() => {
-    if (!coverSrc) { setCoverImg(null); return; }
-    const img = new Image(); img.onload = () => setCoverImg(img); img.src = coverSrc;
+    if (!coverSrc) return;
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => { if (!cancelled) setCoverImg(img); };
+    img.src = coverSrc;
+    return () => { cancelled = true; };
   }, [coverSrc]);
 
   useEffect(() => {
@@ -256,11 +287,11 @@ export default function App() {
     }
 
     if (label.trim() !== '') {
-      if (labelStyle === 'dymo') drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily, tapeScale);
-      else if (labelStyle === 'banner') drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
-      else if (labelStyle === 'badge') drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
+      if (effectiveLabelStyle === 'dymo') drawTape(ctx, w, h, label, tapeColor, tapeOpacity, tapeOffset.x, tapeOffset.y, tapeRotation, fontSizeMultiplier, fontFamily, tapeScale);
+      else if (effectiveLabelStyle === 'banner') drawBanner(ctx, shape, folderRect, label, tapeColor, tapeOpacity, fontSizeMultiplier, fontFamily);
+      else if (effectiveLabelStyle === 'badge') drawBadge(ctx, w, h, label, tapeColor, tapeOpacity, badgeOffset.x, badgeOffset.y, badgeSize, fontSizeMultiplier, fontFamily);
     }
-  }, [baseImgData, cassetteBaseImg, cassetteOverlayImg, cassetteMaskImg, coverImg, label, labelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, tapeScale, fontSizeMultiplier, fontFamily]);
+  }, [baseImgData, cassetteBaseImg, cassetteOverlayImg, cassetteMaskImg, coverImg, label, effectiveLabelStyle, tapeColor, tapeOpacity, effectiveTintColor, coverOffset, coverScale, coverRotation, tapeOffset, badgeOffset, badgeSize, folderShape, tapeRotation, tapeScale, fontSizeMultiplier, fontFamily, fontRenderKey]);
 
   // ── Downloads ─────────────────────────────────────────────────────────────────
   const getFileName = () => (label.trim() === '' ? 'icon' : label).replace(/\s+/g, '_').toLowerCase();
@@ -284,11 +315,15 @@ export default function App() {
 
   // ── Presets ───────────────────────────────────────────────────────────────────
   const handleSavePreset = () => {
-    const name = presetName.trim() || `Stile ${presets.length + 1}`;
+    const name = presetName.trim() || `${t.defaultPresetName} ${presets.length + 1}`;
     const updated = [...presets, { id: Date.now(), name, thumbnail: captureThumbnail(canvasRef.current), ...makeSnapshot(stateRef.current) }];
     setPresets(updated); savePresetsToStorage(updated); setPresetName('');
   };
-  const handleApplyPreset = (preset) => { const { id, name, thumbnail, ...snap } = preset; applySnapshot(snap); pushHistory(makeSnapshot(snap)); };
+  const handleApplyPreset = (preset) => {
+    const snap = { ...preset };
+    delete snap.id; delete snap.name; delete snap.thumbnail;
+    applySnapshot(snap); pushHistory(makeSnapshot(snap));
+  };
   const handleDeletePreset = (id) => { const updated = presets.filter(p => p.id !== id); setPresets(updated); savePresetsToStorage(updated); };
 
   // ── Setters with history ──────────────────────────────────────────────────────
@@ -304,7 +339,7 @@ export default function App() {
   const setFolderColorOverrideWithHistory = (v) => { setFolderColorOverride(v); pushHistory(makeSnapshot({ ...stateRef.current, folderColorOverride: v })); };
   const setCoverScaleWithHistory = (v) => { setCoverScale(v); pushDebounced('coverScale', makeSnapshot({ ...stateRef.current, coverScale: v })); };
   const setCoverRotationWithHistory = (v) => { setCoverRotation(v); pushDebounced('coverRotation', makeSnapshot({ ...stateRef.current, coverRotation: v })); };
-  const switchLang = (l) => { setLang(l); try { localStorage.setItem('fis_lang', l); } catch {} };
+  const switchLang = (l) => { setLang(l); try { localStorage.setItem('fis_lang', l); } catch { /* Ignore private browsing storage failures. */ } };
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -344,7 +379,7 @@ export default function App() {
             <SectionLabel
               t={t} folderShape={folderShape}
               label={label} setLabelWithHistory={setLabelWithHistory}
-              labelStyle={labelStyle} setLabelStyleWithHistory={setLabelStyleWithHistory}
+              labelStyle={effectiveLabelStyle} setLabelStyleWithHistory={setLabelStyleWithHistory}
               fontFamily={fontFamily} setFontFamilyWithHistory={setFontFamilyWithHistory}
               fontSizeMultiplier={fontSizeMultiplier} setFontSizeMultiplierWithHistory={setFontSizeMultiplierWithHistory}
               tapeScale={tapeScale} setTapeScaleWithHistory={setTapeScaleWithHistory}
@@ -363,6 +398,7 @@ export default function App() {
               section3HintVisible={section3HintVisible} setSection3HintVisible={setSection3HintVisible}
               onSave={handleSavePreset} onApply={handleApplyPreset} onDelete={handleDeletePreset}
             />
+            <SectionInstructions t={t} />
           </div>
         </div>
         <SidebarFooter
@@ -377,7 +413,6 @@ export default function App() {
         t={t} coverSrc={coverSrc} label={label} canvasRef={canvasRef}
         onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
       />
-      <Analytics />
     </div>
   );
 }

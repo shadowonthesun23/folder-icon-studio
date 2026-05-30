@@ -3,6 +3,7 @@ import { HISTORY_CAP, makeSnapshot } from '../lib/presets';
 
 export const useHistory = (stateRef, applySnapshot) => {
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [historyLength, setHistoryLength] = useState(1);
   const historyRef = useRef([]);
   const historyIndexRef = useRef(0);
   const isRestoringRef = useRef(false);
@@ -25,6 +26,7 @@ export const useHistory = (stateRef, applySnapshot) => {
     historyRef.current = newStack;
     historyIndexRef.current = newStack.length - 1;
     setHistoryIndex(newStack.length - 1);
+    setHistoryLength(newStack.length);
   }, []);
 
   const undo = useCallback(() => {
@@ -53,7 +55,7 @@ export const useHistory = (stateRef, applySnapshot) => {
   const getIsRestoring = () => isRestoringRef.current;
 
   const canUndo = historyIndex > 0;
-  const canRedo = historyIndex < historyRef.current.length - 1;
+  const canRedo = historyIndex < historyLength - 1;
 
   return { pushHistory, undo, redo, canUndo, canRedo, getIsRestoring };
 };

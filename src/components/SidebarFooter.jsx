@@ -49,17 +49,17 @@ export default function SidebarFooter({
           <div className="absolute bottom-full mb-2 left-0 right-0 bg-[#1c1c1e] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50">
             <button onClick={onDownloadPng} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left">
               <Download size={15} className="text-neutral-400 shrink-0" />
-              <div><div className="font-medium">{t.downloadPng}</div><div className="text-[11px] text-neutral-500">Universale, massima qualità</div></div>
+              <div><div className="font-medium">{t.downloadPng}</div><div className="text-[11px] text-neutral-500">{t.downloadPngDesc}</div></div>
             </button>
             <div className="h-px bg-white/5" />
             <button onClick={onDownloadIcns} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left">
               <Download size={15} className="text-neutral-400 shrink-0" />
-              <div><div className="font-medium">{t.downloadIcns}</div><div className="text-[11px] text-neutral-500">11 risoluzioni + Retina @2x</div></div>
+              <div><div className="font-medium">{t.downloadIcns}</div><div className="text-[11px] text-neutral-500">{t.downloadIcnsDesc}</div></div>
             </button>
             <div className="h-px bg-white/5" />
             <button onClick={onDownloadIco} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neutral-200 hover:bg-white/5 transition-colors text-left">
               <Download size={15} className="text-neutral-400 shrink-0" />
-              <div><div className="font-medium">{t.downloadIco}</div><div className="text-[11px] text-neutral-500">6 risoluzioni (16→256px)</div></div>
+              <div><div className="font-medium">{t.downloadIco}</div><div className="text-[11px] text-neutral-500">{t.downloadIcoDesc}</div></div>
             </button>
           </div>
         )}

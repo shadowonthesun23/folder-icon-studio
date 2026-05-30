@@ -13,7 +13,9 @@ export const loadPresetsFromStorage = () => {
 export const savePresetsToStorage = (presets) => {
   try {
     localStorage.setItem(LS_PRESETS_KEY, JSON.stringify(presets));
-  } catch {}
+  } catch {
+    // Ignore storage quota and private browsing failures.
+  }
 };
 
 export const makeSnapshot = (s) => ({ ...s });
